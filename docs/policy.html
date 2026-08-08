@@ -1,0 +1,227 @@
+---
+layout: doc
+title: "Dynamic Policy"
+description: "Inspect syscall events at runtime with policy_fn, return allow, deny, or audit verdicts, tighten the sandbox while it runs, and extend the supervisor with custom handlers."
+permalink: /docs/policy.html
+short_title: "Dynamic Policy"
+heading: "Dynamic Policy"
+lede: "Static rules cover most policies. When a decision depends on what the workload is actually doing, a callback sees the syscall before it runs and returns a verdict."
+---
+
+<h2>The callback</h2>
+
+<p>A policy function receives an event and a context, and returns a verdict. It is invoked from the supervisor while the child is held at the syscall, so the decision happens before anything takes effect.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
+<span class="k">import</span> errno
+
+<span class="k">def</span> on_event(event, ctx):
+    <span class="c"># Block download tools by argv</span>
+    <span class="k">if</span> event.syscall == <span class="s">"execve"</span> <span class="k">and</span> event.argv_contains(<span class="s">"curl"</span>):
+        <span class="k">return True</span>                       <span class="c"># deny</span>
+
+    <span class="c"># Deny connections to a specific IP</span>
+    <span class="k">if</span> event.syscall == <span class="s">"connect"</span> <span class="k">and</span> event.host == <span class="s">"10.0.0.5"</span>:
+        <span class="k">return</span> errno.EACCES
+
+    <span class="c"># Lock down once the program has finished starting up</span>
+    <span class="k">if</span> event.syscall == <span class="s">"execve"</span>:
+        ctx.restrict_network([])            <span class="c"># block all network</span>
+        ctx.deny_path(<span class="s">"/etc/shadow"</span>)       <span class="c"># dynamic fs deny</span>
+
+    <span class="c"># Audit every file access (allow, but flag it)</span>
+    <span class="k">if</span> event.category == <span class="s">"file"</span>:
+        <span class="k">return</span> <span class="s">"audit"</span>
+
+    <span class="k">return</span> 0                                <span class="c"># allow</span>
+
+sandbox = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    net_allow=[<span class="s">"api.example.com:443"</span>],
+    policy_fn=on_event,
+)
+result = sandbox.run([<span class="s">"python3"</span>, <span class="s">"agent.py"</span>])</code></pre>
+</div>
+
+<h2>Verdicts</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Return value</th>
+                <th scope="col">Meaning</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>0</code> or <code>False</code></th><td>Allow the syscall</td></tr>
+            <tr><th scope="row"><code>True</code> or <code>-1</code></th><td>Deny with <code>EPERM</code></td></tr>
+            <tr><th scope="row">Positive integer</th><td>Deny with that errno</td></tr>
+            <tr><th scope="row"><code>"audit"</code> or <code>-2</code></th><td>Allow, and flag the event</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Event fields</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Contents</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>syscall</code></th><td>Syscall name, for example <code>execve</code> or <code>connect</code></td></tr>
+            <tr><th scope="row"><code>category</code></th><td>One of <code>file</code>, <code>network</code>, <code>process</code>, <code>memory</code></td></tr>
+            <tr><th scope="row"><code>pid</code> / <code>parent_pid</code></th><td>The calling process and its parent</td></tr>
+            <tr><th scope="row"><code>host</code> / <code>port</code></th><td>Network destination, for <code>connect</code>, <code>sendto</code>, and <code>bind</code></td></tr>
+            <tr><th scope="row"><code>argv</code></th><td>Command line, for <code>execve</code>. See <a href="#argv-is-exposed-and-made-safe-first">below</a>.</td></tr>
+            <tr><th scope="row"><code>denied</code></th><td>Whether the static policy would already have denied this</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p><code class="inline">event.argv_contains(s)</code> is a convenience for matching a substring anywhere in the command line.</p>
+
+<h2>Held syscalls</h2>
+
+<p>The child is blocked until the callback returns for these:</p>
+
+<p><code class="inline">execve</code>, <code class="inline">connect</code>, <code class="inline">sendto</code>, <code class="inline">bind</code>, <code class="inline">openat</code></p>
+
+<p>A slow callback therefore slows the workload. Keep the hot path cheap, and push expensive analysis into an audit verdict plus an out-of-band consumer.</p>
+
+<h2>Tightening the sandbox at runtime</h2>
+
+<p>The context object lets a callback narrow the policy while the sandbox runs. A common pattern is to allow a program the network access it needs to start, then revoke it once initialization completes.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Method</th>
+                <th scope="col">Effect</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>restrict_network(ips)</code></th><td>Replace the allowed destinations; an empty list blocks all network</td></tr>
+            <tr><th scope="row"><code>grant_network(ips)</code></th><td>Add allowed destinations</td></tr>
+            <tr><th scope="row"><code>restrict_pid_network(pid, ips)</code></th><td>Per-PID network override</td></tr>
+            <tr><th scope="row"><code>restrict_max_memory(bytes)</code></th><td>Lower the memory limit</td></tr>
+            <tr><th scope="row"><code>restrict_max_processes(n)</code></th><td>Lower the concurrent process limit</td></tr>
+            <tr><th scope="row"><code>deny_path(path)</code></th><td>Add a filesystem denial</td></tr>
+            <tr><th scope="row"><code>allow_path(path)</code></th><td>Add a filesystem grant</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2 id="no-paths-on-events">Why events carry no path strings</h2>
+
+<p>This is the most important thing to understand about the callback, and it is a deliberate design decision rather than a missing feature.</p>
+
+<p>Per <code class="inline">seccomp_unotify(2)</code>, <strong>the kernel re-reads user-memory pointers after the supervisor returns a continue verdict</strong>. A supervisor that reads a path string, approves it, and continues the syscall has validated a string the workload is free to overwrite in the interval. Path filtering built this way looks correct and is not.</p>
+
+<p>So Sandlock does not offer it. Path-based access control belongs in static Landlock rules, <code class="inline">fs_readable</code>, <code class="inline">fs_writable</code>, and <code class="inline">fs_denied</code>, where the kernel resolves the path itself at access time and no window exists. For restrictions that genuinely have to be added at runtime, use <code class="inline">ctx.deny_path()</code>, which adds a kernel-side rule rather than filtering a string.</p>
+
+<h3>argv is exposed, and made safe first</h3>
+
+<p>Command lines are too useful to withhold, so Sandlock makes them safe rather than hiding them. Before exposing <code class="inline">argv</code> to a callback, or returning a continue verdict for an <code class="inline">execve</code>, the supervisor <strong>freezes every task in its process index</strong>, including peer processes that might alias the argv memory through a shared mapping. While a callback is active, fork-like syscalls are traced for one ptrace creation event so children are registered in the index before they can run user code.</p>
+
+<p>If the freeze or the creation tracking cannot be established, for example because a YAMA policy blocks ptrace, <strong>the syscall is denied with <code class="inline">EPERM</code></strong>. The invariant is never silently relaxed to let the workload proceed.</p>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>Use the callback to add restrictions, not to implement them.</strong> A policy whose only defence is a callback returning deny is one bug away from open. Write the static policy so that the callback failing open would still leave the sandbox safe.</p>
+    </div>
+</div>
+
+<h2>Rust</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> sandlock_core::policy_fn::Verdict;
+
+<span class="k">let mut</span> dynamic = Sandbox::builder()
+    .fs_read(<span class="s">"/usr"</span>).fs_read(<span class="s">"/lib"</span>)
+    .policy_fn(|event, ctx| {
+        <span class="k">if</span> event.argv_contains(<span class="s">"curl"</span>) {
+            <span class="k">return</span> Verdict::Deny;
+        }
+        <span class="k">if</span> event.syscall == <span class="s">"execve"</span> {
+            ctx.restrict_network(&amp;[]);
+            ctx.deny_path(<span class="s">"/etc/shadow"</span>);
+        }
+        Verdict::Allow
+    })
+    .build()?;
+<span class="k">let</span> result = dynamic.run(&amp;[<span class="s">"python3"</span>, <span class="s">"agent.py"</span>]).<span class="k">await</span>?;</code></pre>
+</div>
+
+<h2>Custom handlers</h2>
+
+<p>A policy callback is a single function consulted for a fixed set of syscalls. When you need to register for arbitrary syscalls, or synthesize a return value rather than simply allowing or denying, use a handler.</p>
+
+<p>The supervisor runs its built-in chain first and any registered handlers after it, so <strong>a handler can extend confinement but never subvert it</strong>. Registration is validated: handlers on syscalls in the default blocklist, or in the policy's extra denials, are rejected at registration time rather than silently never firing.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">import</span> sandlock
+<span class="k">from</span> sandlock.presets <span class="k">import</span> AuditPathsHandler, COMMON_PATH_SYSCALLS
+
+audit = AuditPathsHandler(callback=<span class="k">lambda</span> path, _ctx: <span class="k">print</span>(<span class="s">f"open {path}"</span>))
+
+sb = sandlock.Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/etc"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>])
+sb.run_with_handlers(
+    cmd=[<span class="s">"/usr/bin/cat"</span>, <span class="s">"/etc/hostname"</span>],
+    handlers=[(s, audit) <span class="k">for</span> s <span class="k">in</span> COMMON_PATH_SYSCALLS],
+)</code></pre>
+</div>
+
+<h3>Included presets</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Class</th>
+                <th scope="col">Behaviour</th>
+                <th scope="col">On handler error</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>AuditPathsHandler</code></th><td>Calls <code>callback(path, ctx)</code> for every intercepted path syscall and always continues</td><td><code>CONTINUE</code></td></tr>
+            <tr><th scope="row"><code>PathDenyHandler</code></th><td>Denies syscalls whose path matches an <code>fnmatch</code> pattern; first match wins</td><td><code>KILL</code></td></tr>
+            <tr><th scope="row"><code>PathAllowHandler</code></th><td>Allows only matching paths and denies the rest</td><td><code>KILL</code></td></tr>
+            <tr><th scope="row"><code>LogSyscallsHandler</code></th><td>Logs one line per intercepted syscall, never changing behaviour</td><td>&mdash;</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The two path-matching presets differ in how they treat an unreadable path, and the asymmetry is intentional. A denylist that cannot classify the path continues, because a denylist only claims that the listed patterns are denied. An allowlist that cannot classify the path denies, because an allowlist claims everything unlisted is denied and failing to verify means failing closed.</p>
+
+<h3>Core types</h3>
+
+<ul>
+    <li><strong><code class="inline">Handler</code></strong> &mdash; subclass and override <code class="inline">handle(ctx) -&gt; NotifAction</code>. Defining <code class="inline">handle</code> as <code class="inline">async def</code> runs it off the supervisor loop, so it can await slow work without stalling other trapped syscalls. The class attribute <code class="inline">on_exception</code> chooses what the supervisor does if the handler itself raises.</li>
+    <li><strong><code class="inline">HandlerCtx</code></strong> &mdash; a frozen dataclass carrying the notification fields (<code class="inline">id</code>, <code class="inline">pid</code>, <code class="inline">flags</code>, <code class="inline">syscall_nr</code>, <code class="inline">arch</code>, <code class="inline">instruction_pointer</code>, <code class="inline">args</code>) plus child-memory accessors: <code class="inline">read_cstr</code>, <code class="inline">read</code>, <code class="inline">write</code>, and <code class="inline">read_path</code>.</li>
+    <li><strong><code class="inline">NotifAction</code></strong> &mdash; a frozen value object built through factory methods: <code class="inline">continue_()</code>, <code class="inline">errno(v)</code>, <code class="inline">returns(v)</code>, <code class="inline">hold()</code>, <code class="inline">kill(sig, pgid)</code>, <code class="inline">inject_fd_send(...)</code>, and <code class="inline">inject_bytes(...)</code>.</li>
+    <li><strong><code class="inline">ExceptionPolicy</code></strong> &mdash; <code class="inline">KILL</code> (the default), <code class="inline">DENY_EPERM</code>, <code class="inline">CONTINUE</code>, <code class="inline">DENY_EIO</code>.</li>
+</ul>
+
+<p>The memory accessors bracket every read and write with validity checks on the notification id, so they cannot race with the kernel aborting or releasing the trapped syscall while the supervisor is reading the child's memory. That protects the read itself; it does not change the fact that a decision made on a path string is subject to the re-read described <a href="#no-paths-on-events">above</a>, so keep Landlock as the authoritative layer for path policy.</p>
+
+<p>The Rust handler API, including its ordering semantics and state patterns, is covered in <a href="/docs/rust.html#custom-handlers">the Rust API guide</a>.</p>

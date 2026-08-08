@@ -1,0 +1,130 @@
+---
+layout: doc
+title: "Documentation"
+description: "Sandlock documentation: install and quickstart, architecture, filesystem and network policy, HTTP ACL, dynamic policy, profiles, and the complete sandbox reference."
+permalink: /docs/
+heading: "Sandlock Documentation"
+lede: "Everything needed to write, test, and ship a Sandlock policy: a five-minute quickstart, guides for each enforcement surface, one page per interface, and a complete field reference."
+---
+
+<p>Sandlock confines a Linux process using <strong>Landlock</strong> for filesystem, network, and IPC rules, <strong>seccomp-bpf</strong> for syscall filtering, and <strong>seccomp user notification</strong> for the decisions that have to be made while the workload runs. It needs no root, no image build, no container runtime, and no hypervisor.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">The shape of every policy</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> -w /tmp -r /usr -r /lib -m 512M -- python3 untrusted.py</code></pre>
+</div>
+
+<h2>Start here</h2>
+
+<div class="docs-index-grid">
+    <a href="/docs/getting-started.html" class="docs-index-card">
+        <h3><i data-lucide="rocket"></i>Getting Started</h3>
+        <p>Check your kernel, build from source, and run your first confined command. Five minutes.</p>
+    </a>
+    <a href="/docs/architecture.html" class="docs-index-card">
+        <h3><i data-lucide="cpu"></i>Architecture</h3>
+        <p>The confinement sequence, what each layer enforces, and which syscalls reach the supervisor.</p>
+    </a>
+</div>
+
+<h2>Policy guides</h2>
+
+<p>Each guide covers one enforcement surface end to end: what the kernel does, what the supervisor does, and how to express the rules from the CLI or an SDK.</p>
+
+<div class="docs-index-grid">
+    <a href="/docs/filesystem.html" class="docs-index-card">
+        <h3><i data-lucide="folder-lock"></i>Filesystem and COW</h3>
+        <p>Read, write, and deny rules; chroot and per-sandbox mounts; copy-on-write commit, abort, and dry-run.</p>
+    </a>
+    <a href="/docs/network.html" class="docs-index-card">
+        <h3><i data-lucide="network"></i>Network Model</h3>
+        <p>The full rule grammar for allowlists and denylists, protocol gating, bind ports, and port virtualization.</p>
+    </a>
+    <a href="/docs/http-acl.html" class="docs-index-card">
+        <h3><i data-lucide="globe-lock"></i>HTTP ACL and Credentials</h3>
+        <p>Method, host, and path rules; zero-config HTTPS interception; injecting a secret the workload never sees.</p>
+    </a>
+    <a href="/docs/policy.html" class="docs-index-card">
+        <h3><i data-lucide="git-branch"></i>Dynamic Policy</h3>
+        <p>Inspect syscall events at runtime, return a verdict, and tighten the sandbox while it runs.</p>
+    </a>
+    <a href="/docs/profiles.html" class="docs-index-card">
+        <h3><i data-lucide="file-cog"></i>Profiles and learn</h3>
+        <p>Reusable TOML profiles, and generating one automatically by observing a real run of your workload.</p>
+    </a>
+</div>
+
+<h2>Interfaces</h2>
+
+<p>One Rust core behind every surface. A policy written for one interface means exactly the same thing in all of them.</p>
+
+<div class="docs-index-grid">
+    <a href="/docs/cli.html" class="docs-index-card">
+        <h3><i data-lucide="terminal"></i>CLI Reference</h3>
+        <p>Every subcommand and flag: <code class="inline">run</code>, <code class="inline">ps</code>, <code class="inline">inspect</code>, <code class="inline">kill</code>, <code class="inline">check</code>, <code class="inline">learn</code>, <code class="inline">profile</code>.</p>
+    </a>
+    <a href="/docs/python.html" class="docs-index-card">
+        <h3><i data-lucide="file-code"></i>Python SDK</h3>
+        <p>The <code class="inline">Sandbox</code> dataclass, pipelines, dry-run, COW fork and reduce, and policy callbacks.</p>
+    </a>
+    <a href="/docs/rust.html" class="docs-index-card">
+        <h3><i data-lucide="file-code-2"></i>Rust API</h3>
+        <p>The typed builder, async execution, protection posture, and custom seccomp-notify handlers.</p>
+    </a>
+    <a href="/docs/go.html" class="docs-index-card">
+        <h3><i data-lucide="file-code"></i>Go SDK</h3>
+        <p>cgo bindings over the C ABI, build modes, and the configuration struct.</p>
+    </a>
+    <a href="/docs/oci.html" class="docs-index-card">
+        <h3><i data-lucide="container"></i>OCI Runtime</h3>
+        <p>Using Sandlock as a low-level runtime under containerd, CRI-O, and Kubernetes.</p>
+    </a>
+    <a href="/docs/mcp.html" class="docs-index-card">
+        <h3><i data-lucide="bot"></i>MCP Server</h3>
+        <p>Sandboxed shell, Python, and file tools for Claude Desktop, Cursor, and other MCP clients.</p>
+    </a>
+</div>
+
+<h2>Reference</h2>
+
+<div class="docs-index-grid">
+    <a href="/docs/reference.html" class="docs-index-card">
+        <h3><i data-lucide="book-marked"></i>Sandbox Reference</h3>
+        <p>Every policy field with its type, default, and behaviour, grouped by section and cross-referenced against the TOML schema.</p>
+    </a>
+</div>
+
+<h2>Requirements at a glance</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Requirement</th>
+                <th scope="col">Version</th>
+                <th scope="col">Needed for</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row">Linux</th><td>6.12+</td><td>Landlock ABI v6, the strict default posture</td></tr>
+            <tr><th scope="row">Rust</th><td>1.70+</td><td>Building from source</td></tr>
+            <tr><th scope="row">Python</th><td>3.8+</td><td>The Python SDK and MCP server (optional)</td></tr>
+            <tr><th scope="row">Root</th><td>Not required</td><td>&mdash;</td></tr>
+            <tr><th scope="row">cgroups</th><td>Not required</td><td>&mdash;</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Older kernels.</strong> Sandlock refuses to start by default when a protection it expects is unavailable. Individual protections can be degraded or disabled per policy so a sandbox can run on a kernel below 6.12. See <a href="/docs/reference.html#protection-opt-out">protection opt-out</a>.</p>
+    </div>
+</div>
+
+<h2>Getting help</h2>
+
+<p>Bugs, feature requests, and questions belong in <a href="https://github.com/multikernel/sandlock/issues" target="_blank" rel="noopener noreferrer">GitHub issues</a>. Suspected sandbox escapes should go privately to <a href="mailto:contact@multikernel.io">contact@multikernel.io</a> first; see the <a href="/security.html">security model</a> for what counts. Teams deploying Sandlock in production can work directly with the maintainers through the <a href="/enterprise.html">design partner program</a>.</p>

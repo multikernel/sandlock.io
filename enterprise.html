@@ -1,0 +1,345 @@
+---
+layout: default
+title: "Enterprise"
+description: "Sandlock is open source and free to deploy. For production rollouts, Multikernel Technologies works directly with platform teams through the design partner program."
+permalink: /enterprise.html
+---
+
+<style>
+.offer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    gap: var(--space-6);
+    margin-top: var(--space-10);
+}
+
+.offer {
+    padding: var(--space-8);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-left: 3px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+}
+
+.offer.primary {
+    border-left-color: var(--accent-500);
+    box-shadow: var(--shadow-sm);
+}
+
+.offer .tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gray-400);
+    margin-bottom: var(--space-3);
+}
+
+.offer.primary .tag {
+    color: var(--accent-700);
+}
+
+.offer h3 {
+    font-size: var(--text-xl);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--gray-900);
+    margin-bottom: var(--space-3);
+}
+
+.offer > p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+    margin-bottom: var(--space-6);
+}
+
+.offer .capability-features {
+    flex: 1;
+}
+
+.offer .value-cta {
+    margin-top: var(--space-8);
+}
+
+.process {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+    margin-top: var(--space-10);
+    counter-reset: step;
+}
+
+.process-step {
+    position: relative;
+    padding: var(--space-6);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: 2px solid var(--accent-500);
+    border-radius: var(--radius-md);
+}
+
+.process-step .n {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: rgba(201, 161, 62, 0.35);
+    display: block;
+    margin-bottom: var(--space-3);
+    line-height: 1;
+}
+
+.process-step h3 {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: white;
+    margin-bottom: var(--space-2);
+}
+
+.process-step p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.fit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-5);
+    margin-top: var(--space-8);
+}
+
+.fit {
+    padding: var(--space-6);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+}
+
+.fit i {
+    width: 20px;
+    height: 20px;
+    color: var(--accent-600);
+    margin-bottom: var(--space-4);
+    display: block;
+}
+
+.fit h3 {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: var(--space-2);
+}
+
+.fit p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+}
+
+@media (max-width: 1000px) {
+    .offer-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .process {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .process {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<section class="hero hero-page">
+    <div class="hero-container">
+        <div class="hero-badge">
+            <i data-lucide="building-2"></i>
+            <span>Enterprise</span>
+        </div>
+        <h1>Deploy Sandlock in Production</h1>
+        <p class="subtitle">Sandlock is Apache-2.0 licensed and free to run at any scale, with no license key, no seat count, and no telemetry. What we sell is the engineering work of getting it right in your environment.</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="handshake"></i>
+                <span>How to get it</span>
+            </div>
+            <h2 class="section-title">Two Ways to Adopt</h2>
+            <p class="section-subtitle">Most teams start with the open-source project and stay there. Platform teams putting Sandlock on the critical path of a product usually want us in the room.</p>
+        </div>
+
+        <div class="offer-grid">
+            <div class="offer">
+                <span class="tag">Open source</span>
+                <h3>Build it and run it</h3>
+                <p>Clone the repository, build with Cargo, and deploy on any Linux 6.12 host. The full feature set is in the open-source project. There is no paywalled tier, no enterprise-only flag, and no runtime that phones home.</p>
+                <div class="capability-features">
+                    <div class="feature-item"><i data-lucide="check"></i><span>Complete CLI, Python, Rust, and Go interfaces</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span>OCI runtime for containerd, CRI-O, and Kubernetes</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span>MCP server for AI agent tool execution</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span>Community support through GitHub issues</span></div>
+                </div>
+                <div class="value-cta">
+                    <a href="https://github.com/multikernel/sandlock" target="_blank" rel="noopener noreferrer" class="btn-link">
+                        View the repository <i data-lucide="arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="offer primary">
+                <span class="tag">Design partner program</span>
+                <h3>Build it with us</h3>
+                <p>We are onboarding a small number of platform and security teams as design partners. The engineers who build Sandlock work embedded with yours, your workloads drive what we harden next, and your requirements land in the roadmap rather than in a queue.</p>
+                <div class="capability-features">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Policy design review.</strong> We audit the sandbox policies you plan to ship and tell you where they are wider than you think.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Integration engineering.</strong> Wiring Sandlock into your agent framework, CI system, orchestrator, or multi-tenant execution service.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Custom seccomp handlers.</strong> Extending the supervisor for interception your workload needs, built against the same handler API we use internally.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Kernel-side work.</strong> Our team works upstream on the Linux kernel; when the right fix belongs in Landlock or seccomp, we can take it there.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Fleet rollout support.</strong> Kernel version strategy, protection posture across a mixed fleet, and profile generation for existing workloads.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Priority engineering response</strong> with agreed response times, direct to the maintainers.</span></div>
+                </div>
+                <div class="value-cta">
+                    <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer" class="btn-link">
+                        Become a design partner <i data-lucide="arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-dark">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="route"></i>
+                <span>Engagement</span>
+            </div>
+            <h2 class="section-title">What Working Together Looks Like</h2>
+            <p class="section-subtitle">No procurement theatre before there is anything to procure. We start with your actual workload.</p>
+        </div>
+
+        <div class="process">
+            <div class="process-step">
+                <span class="n">01</span>
+                <h3>Technical call</h3>
+                <p>Forty-five minutes with an engineer, not a salesperson. Bring the workload you want to confine and the boundary you need. If Sandlock is the wrong tool, we will say so.</p>
+            </div>
+            <div class="process-step">
+                <span class="n">02</span>
+                <h3>Policy prototype</h3>
+                <p>We generate a starting policy from a real run of your workload, tighten it by hand, and show you the observed-versus-granted gap so you can see what the policy actually permits.</p>
+            </div>
+            <div class="process-step">
+                <span class="n">03</span>
+                <h3>Pilot</h3>
+                <p>Sandlock runs against a slice of production traffic on your infrastructure. We instrument it, measure the overhead, and fix what breaks alongside your team.</p>
+            </div>
+            <div class="process-step">
+                <span class="n">04</span>
+                <h3>Rollout</h3>
+                <p>Fleet-wide deployment with a kernel and protection-posture plan, runbooks for your on-call, and a support channel straight to the maintainers.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="users-round"></i>
+                <span>Who we work with</span>
+            </div>
+            <h2 class="section-title">Teams That Get the Most From This</h2>
+        </div>
+
+        <div class="fit-grid">
+            <div class="fit">
+                <i data-lucide="bot"></i>
+                <h3>AI platform teams</h3>
+                <p>You ship agents that execute tool calls, and "the model decided to run this" is a threat model you have to answer for in a security review.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="server"></i>
+                <h3>Developer platform teams</h3>
+                <p>You operate shared CI runners or a build service where jobs come from people outside your trust boundary, and per-job VMs are eating the budget.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="code-xml"></i>
+                <h3>Code execution products</h3>
+                <p>Notebook backends, interpreters, autograders, and evaluation harnesses, where sandbox startup latency is a line item on every request.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="shield"></i>
+                <h3>Security engineering</h3>
+                <p>You are asked to approve untrusted execution on shared infrastructure and want a boundary you can describe precisely to an auditor.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="section-container narrow">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="landmark"></i>
+                <span>Who builds it</span>
+            </div>
+            <h2 class="section-title">Multikernel Technologies</h2>
+            <p class="section-subtitle">Sandlock is built and maintained by Multikernel Technologies, a systems company working on Linux kernel isolation. Our engineers contribute upstream to the kernel, which is also where several of Sandlock's foundations live.</p>
+        </div>
+
+        <div class="cards-grid">
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="git-merge"></i></div>
+                <h3 class="capability-title">Upstream first</h3>
+                <p class="capability-description">Sandlock is built on Landlock and seccomp as they ship in mainline Linux. There is no out-of-tree module to install and no patched kernel to maintain, so your kernel upgrade path stays yours.</p>
+            </div>
+
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="layers"></i></div>
+                <h3 class="capability-title">The other half of the problem</h3>
+                <p class="capability-description">When a shared kernel is not a boundary you can accept, Multikernel's split-kernel architecture gives each workload its own Linux kernel on dedicated cores, with no hypervisor. Same company, stronger boundary, higher cost.</p>
+                <div class="value-cta" style="margin-top: var(--space-4);">
+                    <a href="https://multikernel.io" target="_blank" rel="noopener noreferrer" class="btn-link">
+                        multikernel.io <i data-lucide="arrow-up-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="scale"></i></div>
+                <h3 class="capability-title">Apache-2.0, permanently</h3>
+                <p class="capability-description">The project is Apache-2.0 licensed, including the patent grant. There is no contributor licence agreement designed to enable a future relicense, and no open-core boundary running through the feature set.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-band">
+    <div class="cta-band-inner">
+        <h2>Let's Look at Your Workload</h2>
+        <p>Book a technical call, or email us with what you are trying to confine and we will tell you whether Sandlock is the right boundary for it.</p>
+        <div class="button-group">
+            <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+                <i data-lucide="calendar"></i>
+                Schedule a Demo
+            </a>
+            <a href="mailto:contact@multikernel.io" class="btn btn-secondary">
+                <i data-lucide="mail"></i>
+                contact@multikernel.io
+            </a>
+        </div>
+    </div>
+</section>

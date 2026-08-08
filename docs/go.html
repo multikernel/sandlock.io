@@ -1,0 +1,243 @@
+---
+layout: doc
+title: "Go SDK"
+description: "Go bindings for Sandlock over the C ABI: build modes, the Sandbox struct, execution methods, streaming with Popen, dynamic policy callbacks, and process lifecycle."
+permalink: /docs/go.html
+short_title: "Go SDK"
+heading: "Go SDK"
+lede: "cgo bindings over libsandlock_ffi, mirroring the Python SDK's surface. A Sandbox is a plain configuration struct with no runtime state, so it is safe to reuse and share across goroutines."
+---
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Import path</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">import</span> sandlock <span class="s">"github.com/multikernel/sandlock/go"</span></code></pre>
+</div>
+
+<p>Linux only. The runtime requires Linux 6.12 or later by default; the <code class="inline">AllowDegraded</code> and <code class="inline">Disable</code> fields let a sandbox run on older kernels by degrading or disabling the v6-only protections.</p>
+
+<h2>Building</h2>
+
+<p>cgo links against <code class="inline">libsandlock_ffi</code>, which the Rust workspace produces. There are two build modes.</p>
+
+<h3>Released mode: an installed library via pkg-config</h3>
+
+<p>The default build resolves the library and header through <code class="inline">pkg-config</code>, so the SDK works from another module once the native side is installed.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># installs libsandlock_ffi.so, sandlock.h, and sandlock.pc</span>
+<span class="p">$</span> <span class="k">sudo make</span> install-go-lib
+<span class="p">$</span> <span class="k">go get</span> github.com/multikernel/sandlock/go</code></pre>
+</div>
+
+<p><code class="inline">make install-go-lib</code> honours <code class="inline">PREFIX</code> (default <code class="inline">/usr/local</code>) and <code class="inline">DESTDIR</code>. For a non-standard prefix, point pkg-config at it:</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">make</span> install-go-lib PREFIX=<span class="s">$HOME/.local</span>
+<span class="p">$</span> <span class="k">export</span> PKG_CONFIG_PATH=<span class="s">$HOME/.local/lib/pkgconfig</span></code></pre>
+</div>
+
+<p>The installed <code class="inline">sandlock.pc</code> bakes an rpath to its libdir, so binaries find the shared library at runtime without <code class="inline">LD_LIBRARY_PATH</code>.</p>
+
+<h3>In-tree mode: build against a checkout</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">cargo build</span> --release -p sandlock-ffi
+<span class="p">$</span> <span class="k">cd</span> go &amp;&amp; <span class="k">go build</span> -tags sandlock_repo ./...
+<span class="p">$</span> <span class="k">go test</span> -tags sandlock_repo ./...</code></pre>
+</div>
+
+<h2>Quick start</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">package</span> main
+
+<span class="k">import</span> (
+	<span class="s">"context"</span>
+	<span class="s">"fmt"</span>
+	<span class="s">"log"</span>
+
+	sandlock <span class="s">"github.com/multikernel/sandlock/go"</span>
+)
+
+<span class="k">func</span> main() {
+	sb := &amp;sandlock.Sandbox{
+		FSReadable: []<span class="k">string</span>{<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/lib64"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>},
+		FSWritable: []<span class="k">string</span>{<span class="s">"/tmp"</span>},
+	}
+	res, err := sb.Run(context.Background(), <span class="s">"echo"</span>, <span class="s">"hello"</span>)
+	<span class="k">if</span> err != <span class="k">nil</span> {
+		log.Fatal(err)
+	}
+	fmt.Printf(<span class="s">"exit=%d: %s"</span>, res.ExitCode, res.Stdout)
+}</code></pre>
+</div>
+
+<h2>The Sandbox struct</h2>
+
+<p>Every field is optional, and an unset field means "no restriction" unless noted. Sandlock's default syscall blocklist is always applied. A <code class="inline">Sandbox</code> carries no runtime state, so it can be reused and shared across goroutines: <code class="inline">Run</code>, <code class="inline">RunInteractive</code>, and <code class="inline">DryRun</code> each build a fresh native policy.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Group</th><th scope="col">Fields</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row">Filesystem</th><td><code>FSReadable</code>, <code>FSWritable</code>, <code>FSDenied</code>, <code>Workdir</code>, <code>Cwd</code>, <code>Chroot</code>, <code>FSMount</code></td></tr>
+            <tr><th scope="row">Network</th><td><code>NetAllow</code>, <code>NetDeny</code>, <code>NetAllowBind</code>, <code>NetDenyBind</code>, <code>PortRemap</code></td></tr>
+            <tr><th scope="row">HTTP ACL</th><td><code>HTTPAllow</code>, <code>HTTPDeny</code>, <code>HTTPPorts</code>, <code>HTTPCAFile</code>, <code>HTTPKeyFile</code></td></tr>
+            <tr><th scope="row">Resources</th><td><code>MaxMemory</code>, <code>MaxDisk</code>, <code>MaxProcesses</code>, <code>MaxCPU</code>, <code>MaxOpenFiles</code>, <code>CPUCores</code>, <code>NumCPUs</code>, <code>GPUDevices</code></td></tr>
+            <tr><th scope="row">Syscalls</th><td><code>ExtraAllowSyscalls</code>, <code>ExtraDenySyscalls</code></td></tr>
+            <tr><th scope="row">Determinism</th><td><code>RandomSeed</code>, <code>TimeStart</code>, <code>NoRandomizeMemory</code>, <code>NoHugePages</code>, <code>DeterministicDirs</code></td></tr>
+            <tr><th scope="row">Environment</th><td><code>CleanEnv</code>, <code>Env</code></td></tr>
+            <tr><th scope="row">Misc</th><td><code>UID</code>, <code>GID</code>, <code>NoCoredump</code>, <code>Name</code></td></tr>
+            <tr><th scope="row">COW branch</th><td><code>FSStorage</code>, <code>OnExit</code>, <code>OnError</code></td></tr>
+            <tr><th scope="row">Dynamic policy</th><td><code>PolicyFn</code></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Network rule syntax</h3>
+
+<p><code class="inline">NetAllow</code> entries follow Sandlock's rule grammar. A bare <code class="inline">host:port</code> is TCP and UDP (<code class="inline">"api.openai.com:443"</code>, <code class="inline">"github.com:22,443"</code>, <code class="inline">":53"</code>); a target may be a host, an IP, or a CIDR (<code class="inline">"10.0.0.0/8:443"</code>, <code class="inline">"[2606:4700::/32]:443"</code>); scheme prefixes opt other protocols in (<code class="inline">"udp://1.1.1.1:53"</code>, <code class="inline">"udp://*"</code>, <code class="inline">"icmp://host"</code>, <code class="inline">"icmp://*"</code>).</p>
+
+<p><code class="inline">NetDeny</code> is the inverse, a default-allow denylist restricted to IP and CIDR targets, mutually exclusive with <code class="inline">NetAllow</code>. <code class="inline">NetAllowBind</code> entries are comma-separated single ports or inclusive ranges (<code class="inline">"8080"</code>, <code class="inline">"3000-3010"</code>, <code class="inline">"8080,9000-9005"</code>), and <code class="inline">NetDenyBind</code> is its inverse. See <a href="/docs/network.html">the network model</a> for the complete grammar.</p>
+
+<h2>Execution</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">func</span> (s *Sandbox) Run(ctx context.Context, cmd ...<span class="k">string</span>) (*Result, <span class="k">error</span>)
+<span class="k">func</span> (s *Sandbox) RunInteractive(ctx context.Context, cmd ...<span class="k">string</span>) (<span class="k">int</span>, <span class="k">error</span>)
+<span class="k">func</span> (s *Sandbox) DryRun(ctx context.Context, cmd ...<span class="k">string</span>) (*DryRunResult, <span class="k">error</span>)
+<span class="k">func</span> (s *Sandbox) Spawn(cmd ...<span class="k">string</span>) (*Process, <span class="k">error</span>)
+<span class="k">func</span> (s *Sandbox) Popen(stdio Stdio, cmd ...<span class="k">string</span>) (*Process, <span class="k">error</span>)</code></pre>
+</div>
+
+<ul>
+    <li><strong><code class="inline">Run</code></strong> captures stdout and stderr and waits. A context deadline kills the process and returns a result with <code class="inline">ExitCode == -1</code>. Context cancellation <em>without</em> a deadline does not preempt a running child.</li>
+    <li><strong><code class="inline">RunInteractive</code></strong> inherits the caller's stdio and returns the exit code.</li>
+    <li><strong><code class="inline">DryRun</code></strong> runs against a temporary copy-on-write layer, reports the <code class="inline">Changes</code> it would have made, and discards them. Requires <code class="inline">Workdir</code>.</li>
+    <li><strong><code class="inline">Spawn</code></strong> starts a process without waiting.</li>
+    <li><strong><code class="inline">Popen</code></strong> is the streaming counterpart of <code class="inline">Spawn</code>.</li>
+</ul>
+
+<h3>Streaming with Popen</h3>
+
+<p>Each stream set to <code class="inline">StdioPiped</code> is handed back on the <code class="inline">*Process</code> as an <code class="inline">*os.File</code> you read or write while the child runs. The zero <code class="inline">Stdio</code> inherits all three, which is identical to <code class="inline">Spawn</code>.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>p, _ := sb.Popen(sandlock.Stdio{
+	Stdin:  sandlock.StdioPiped,
+	Stdout: sandlock.StdioPiped,
+}, <span class="s">"cat"</span>)
+<span class="k">defer</span> p.Close()
+
+p.Stdin.Write([]<span class="k">byte</span>(<span class="s">"hi\n"</span>))
+p.Stdin.Close()                 <span class="c">// EOF so cat exits</span>
+out, _ := io.ReadAll(p.Stdout)  <span class="c">// "hi\n"</span>
+res, _ := p.Wait()</code></pre>
+</div>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Ordering rules for piped streams.</strong> Close a piped <code class="inline">Stdin</code> before <code class="inline">Wait</code>, or let <code class="inline">Wait</code> close it, so a reader child sees EOF. Drain a piped <code class="inline">Stdout</code> or <code class="inline">Stderr</code> before <code class="inline">Wait</code>, or call <code class="inline">Kill</code> from another goroutine to interrupt a blocked <code class="inline">Wait</code>. A Popen'd process sends piped output to the <code class="inline">Stdout</code> and <code class="inline">Stderr</code> fields, so unlike <code class="inline">Run</code>, <code class="inline">Result.Stdout</code> and <code class="inline">Result.Stderr</code> are always empty.</p>
+    </div>
+</div>
+
+<h2>Process lifecycle</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">func</span> (p *Process) Pid() <span class="k">int</span>
+<span class="k">func</span> (p *Process) Wait() (*Result, <span class="k">error</span>)
+<span class="k">func</span> (p *Process) Pause() <span class="k">error</span>              <span class="c">// SIGSTOP to the process group</span>
+<span class="k">func</span> (p *Process) Resume() <span class="k">error</span>             <span class="c">// SIGCONT</span>
+<span class="k">func</span> (p *Process) Kill() <span class="k">error</span>               <span class="c">// SIGKILL</span>
+<span class="k">func</span> (p *Process) Ports() (<span class="k">map</span>[<span class="k">int</span>]<span class="k">int</span>, <span class="k">error</span>) <span class="c">// virtual→real, with PortRemap</span>
+<span class="k">func</span> (p *Process) Close() <span class="k">error</span>              <span class="c">// release the handle; kills if running</span></code></pre>
+</div>
+
+<h2>Dynamic policy</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">type</span> PolicyFunc <span class="k">func</span>(event SyscallEvent, ctx *PolicyContext) PolicyDecision
+
+<span class="k">func</span> Allow() PolicyDecision
+<span class="k">func</span> Deny() PolicyDecision
+<span class="k">func</span> Audit() PolicyDecision
+<span class="k">func</span> DenyWith(errnoValue <span class="k">int</span>) PolicyDecision
+
+<span class="k">func</span> (e SyscallEvent) ArgvContains(sub <span class="k">string</span>) <span class="k">bool</span>
+
+<span class="k">func</span> (ctx *PolicyContext) RestrictNetwork(ips []<span class="k">string</span>) <span class="k">error</span>
+<span class="k">func</span> (ctx *PolicyContext) GrantNetwork(ips []<span class="k">string</span>) <span class="k">error</span>
+<span class="k">func</span> (ctx *PolicyContext) RestrictMaxMemory(bytes <span class="k">uint64</span>)
+<span class="k">func</span> (ctx *PolicyContext) RestrictMaxProcesses(n <span class="k">uint32</span>)
+<span class="k">func</span> (ctx *PolicyContext) RestrictPIDNetwork(pid <span class="k">uint32</span>, ips []<span class="k">string</span>) <span class="k">error</span>
+<span class="k">func</span> (ctx *PolicyContext) DenyPath(path <span class="k">string</span>) <span class="k">error</span>
+<span class="k">func</span> (ctx *PolicyContext) AllowPath(path <span class="k">string</span>) <span class="k">error</span></code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sb := &amp;sandlock.Sandbox{
+	FSReadable: []<span class="k">string</span>{<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/lib64"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>},
+	PolicyFn: <span class="k">func</span>(event sandlock.SyscallEvent, ctx *sandlock.PolicyContext) sandlock.PolicyDecision {
+		<span class="k">if</span> event.Syscall == <span class="s">"execve"</span> &amp;&amp; event.ArgvContains(<span class="s">"curl"</span>) {
+			<span class="k">return</span> sandlock.Deny()
+		}
+		<span class="k">return</span> sandlock.Allow()
+	},
+}</code></pre>
+</div>
+
+<p>Path strings are deliberately absent from events. Use the Landlock fields for static path policy and <code class="inline">DenyPath</code> or <code class="inline">AllowPath</code> for the dynamic hook. <code class="inline">Argv</code> is populated for <code class="inline">execve</code> and <code class="inline">execveat</code> events. The reasoning is on <a href="/docs/policy.html#no-paths-on-events">the dynamic policy page</a>.</p>
+
+<h2>Confining the current process</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">func</span> Confine(s *Sandbox) <span class="k">error</span></code></pre>
+</div>
+
+<p>Applies the sandbox's Landlock filesystem rules to the <strong>current</strong> process, in place and irreversibly, with no fork and no exec. Only filesystem fields are honoured; configuration that needs a supervisor or a fresh child, such as seccomp, network rules, resource limits, or environment changes, is <strong>rejected rather than silently ignored</strong>. This is something the <code class="inline">sandlock</code> CLI cannot do.</p>

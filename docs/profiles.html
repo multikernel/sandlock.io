@@ -1,0 +1,215 @@
+---
+layout: doc
+title: "Profiles and sandlock learn"
+description: "Reusable TOML sandbox profiles, and generating one automatically by observing a real run of your workload with sandlock learn."
+permalink: /docs/profiles.html
+short_title: "Profiles and learn"
+heading: "Profiles and sandlock learn"
+lede: "A policy that has stopped changing belongs in a file rather than a command line. And you do not have to write that file by hand: sandlock can watch a real run and produce it for you."
+---
+
+<h2>Profiles</h2>
+
+<p>A profile is a TOML file in <code class="inline">~/.config/sandlock/profiles/</code>, referenced by name with <code class="inline">-p</code>. The schema is sectioned, and <strong>flat top-level keys such as <code class="inline">fs_readable = [...]</code> are rejected</strong> rather than ignored, so a profile written against the wrong shape fails loudly instead of silently granting nothing.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">~/.config/sandlock/profiles/build.toml</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>[program]
+exec      = <span class="s">"make"</span>
+args      = [<span class="s">"-j4"</span>]
+clean_env = <span class="k">true</span>
+env       = { CC = <span class="s">"gcc"</span>, LANG = <span class="s">"C.UTF-8"</span> }
+
+[filesystem]
+read  = [<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/lib64"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>]
+write = [<span class="s">"/tmp/work"</span>]
+
+[limits]
+memory    = <span class="s">"512M"</span>
+processes = 50
+
+[syscalls]
+extra_deny = []</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Using profiles</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock profile</span> list
+<span class="p">$</span> <span class="k">sandlock profile</span> show build
+<span class="p">$</span> <span class="k">sandlock profile</span> delete build
+
+<span class="c"># Runs [program].exec with [program].args</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -p build
+
+<span class="c"># A trailing command overrides [program]</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -p build -- make test
+
+<span class="c"># A profile that is not installed in the profiles directory</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --profile-file ./ci.toml -- make</code></pre>
+</div>
+
+<p>Every policy section is available in a profile. The full schema, with each field's type and default, is in the <a href="/docs/reference.html">sandbox reference</a>; the sections are <code class="inline">[config]</code>, <code class="inline">[determinism]</code>, <code class="inline">[program]</code>, <code class="inline">[filesystem]</code>, <code class="inline">[network]</code>, <code class="inline">[http]</code>, <code class="inline">[syscalls]</code>, and <code class="inline">[limits]</code>.</p>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Naming a sandbox instance.</strong> A profile describes the policy, not the instance. Pass <code class="inline">--name</code> when you need a stable virtual hostname for a particular run, for example when several sandboxes launched from the same profile need to be told apart by <code class="inline">sandlock ps</code> or reached by a reverse proxy.</p>
+    </div>
+</div>
+
+<h2><code>sandlock learn</code></h2>
+
+<p>Writing a filesystem policy by hand for a real workload is tedious and error-prone: you find the missing paths one failed run at a time. <code class="inline">sandlock learn</code> runs the workload under observation and emits a profile covering the paths, network connections, and resource peaks it <em>actually used</em>. The result feeds straight into <code class="inline">sandlock run -p</code>.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Synopsis</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sandlock learn [options] -- &lt;cmd&gt; [args...]</code></pre>
+</div>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Flag</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>-o &lt;file&gt;</code></th><td>stdout</td><td>Write the profile to a file</td></tr>
+            <tr><th scope="row"><code>--timeout &lt;secs&gt;</code></th><td>none</td><td>Kill the workload after N seconds and emit a partial profile</td></tr>
+            <tr><th scope="row"><code>--collapse [N]</code></th><td>off</td><td>Collapse directories where N or more files were observed (default 4)</td></tr>
+            <tr><th scope="row"><code>--collapse-prefix &lt;path&gt;</code></th><td>none</td><td>Force collapse of everything under a prefix; repeatable</td></tr>
+            <tr><th scope="row"><code>--force-sensitive-collapse</code></th><td>off</td><td>Allow <code>--collapse-prefix</code> to target sensitive paths</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>What is recorded</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Domain</th>
+                <th scope="col">Mechanism</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row">Filesystem reads</th><td>seccomp-notify on <code>openat</code> and <code>open</code></td></tr>
+            <tr><th scope="row">Filesystem writes</th><td>The same, classified by open flags (<code>O_WRONLY</code>, <code>O_RDWR</code>, <code>O_CREAT</code>)</td></tr>
+            <tr><th scope="row">Binaries and libraries</th><td><code>/proc/&lt;pid&gt;/exe</code> plus <code>r-xp</code> mappings from <code>/proc/&lt;pid&gt;/maps</code></td></tr>
+            <tr><th scope="row">Network connections</th><td>seccomp-notify on <code>connect</code>, <code>sendto</code>, <code>sendmsg</code></td></tr>
+            <tr><th scope="row">Resource peaks</th><td>Sampling <code>/proc/&lt;pid&gt;/status</code>: RSS, thread count, fd count</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Path collapsing</h3>
+
+<p>By default every observed path is recorded individually, which is precise and unreadable for a tree like <code class="inline">/usr/lib</code>. <code class="inline">--collapse N</code> aggregates directories where at least N files were touched.</p>
+
+<p>After collapsing, a deduplication pass removes any individual path already covered by an ancestor in the list. Landlock grants are recursive, so the ancestor entry is sufficient and the descendant is noise.</p>
+
+<h3>Write collapse is automatic</h3>
+
+<p>Files created during the run do not exist on the real filesystem, because COW intercepted them. Landlock requires an existing path, so the collapser walks up to the nearest existing ancestor for writes. <strong>This is not optional</strong>: omitting the ancestor would produce a profile that causes <code class="inline">sandlock run</code> to abort.</p>
+
+<h3>Path tiers</h3>
+
+<p>Automatic collapsing on a sensitive directory is how a generated profile quietly becomes a bad one. <code class="inline">learn</code> classifies paths into three tiers and treats them differently.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Tier</th>
+                <th scope="col">Paths</th>
+                <th scope="col">Write (auto)</th>
+                <th scope="col"><code>--collapse N</code></th>
+                <th scope="col"><code>--collapse-prefix</code></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row">Protected</th>
+                <td><code>/</code>, <code>/root</code>, <code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.kube</code>, <code>~/.gnupg</code></td>
+                <td>Skip and error</td>
+                <td>Never; keeps the individual file</td>
+                <td>Refused without <code>--force-sensitive-collapse</code></td>
+            </tr>
+            <tr>
+                <th scope="row">Guarded</th>
+                <td><code>/etc</code>, <code>/proc</code>, <code>/sys</code>, <code>/dev</code>, <code>/boot</code>, <code>/run/secrets</code></td>
+                <td>Emit, warn, and diff</td>
+                <td>Never; keeps the individual file</td>
+                <td>Refused without <code>--force-sensitive-collapse</code></td>
+            </tr>
+            <tr>
+                <th scope="row">Normal</th>
+                <td>Everything else</td>
+                <td>Collapse freely</td>
+                <td>Collapse freely</td>
+                <td>Collapse freely</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>The observed-versus-granted diff</h3>
+
+<p>When a write collapse lands on a guarded path, <code class="inline">learn</code> prints a warning to stderr along with a diff: the list of siblings in that directory the workload never touched but <em>will</em> now have write access to. That difference is the cost of the collapse, made explicit so an operator can decide whether it is acceptable rather than discovering it later.</p>
+
+<p><code class="inline">--force-sensitive-collapse</code> permits <code class="inline">--collapse-prefix</code> to target protected and guarded paths. The warning and the diff are still printed.</p>
+
+<h3>Examples</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Observe, then run under the result</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># Observe a Python script and generate a profile</span>
+<span class="p">$</span> <span class="k">sandlock learn</span> -o profile.toml -- python3 build.py
+
+<span class="c"># Run under the generated profile</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -p profile.toml -- python3 build.py
+
+<span class="c"># Collapse common library directories for a tighter profile</span>
+<span class="p">$</span> <span class="k">sandlock learn</span> --collapse -o profile.toml -- python3 build.py</code></pre>
+</div>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>A generated profile is a starting point, not a finished policy.</strong> It describes one execution. A code path that did not run contributes nothing, so the first real run under the profile may still be missing a path. Review what it produced, tighten what is too broad, and exercise the workload's less common paths before trusting it in production.</p>
+    </div>
+</div>
+
+<h2>Inspecting a running sandbox</h2>
+
+<p><code class="inline">sandlock inspect</code> prints a live sandbox's effective policy, which is the other direction of the same idea: rather than generating a policy from a run, it recovers the policy a run is actually operating under. TOML output round-trips into a profile.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Recover a policy from a running sandbox</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock ps</span>
+<span class="o">NAME          PID      UPTIME  CMD</span>
+<span class="o">api.local     12345        5m  python3 server.py</span>
+
+<span class="p">$</span> <span class="k">sandlock inspect</span> api.local            <span class="c"># JSON</span>
+<span class="p">$</span> <span class="k">sandlock inspect</span> api.local --toml     <span class="c"># TOML</span></code></pre>
+</div>
+
+<p>A sandbox is only visible to <code class="inline">ps</code> and <code class="inline">inspect</code> when its control socket is enabled, which it is by default. Setting <code class="inline">control_socket=False</code> creates no runtime directory, pid file, or control-socket task at all, and the sandbox becomes invisible to both.</p>

@@ -1,0 +1,349 @@
+---
+layout: default
+title: "Security Model"
+description: "Sandlock's threat model: trust boundaries, what each enforcement layer guarantees, how TOCTOU is handled, default-deny posture, and the limits of the sandbox."
+permalink: /security.html
+---
+
+<style>
+.boundary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-5);
+    margin-top: var(--space-10);
+}
+
+.boundary {
+    padding: var(--space-6);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-top: 2px solid var(--accent-500);
+    border-radius: var(--radius-lg);
+}
+
+.boundary .tier {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gray-400);
+    display: block;
+    margin-bottom: var(--space-2);
+}
+
+.boundary h3 {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: var(--space-3);
+}
+
+.boundary p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+}
+
+.claims {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+    margin-top: var(--space-8);
+}
+
+.claim-col {
+    padding: var(--space-8);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200);
+    background: white;
+}
+
+.claim-col.does {
+    border-left: 3px solid var(--success);
+}
+
+.claim-col.does-not {
+    border-left: 3px solid var(--error);
+}
+
+.claim-col h3 {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: var(--space-5);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.claim-col.does h3 i {
+    color: var(--success);
+    width: 18px;
+    height: 18px;
+}
+
+.claim-col.does-not h3 i {
+    color: var(--error);
+    width: 18px;
+    height: 18px;
+}
+
+.claim-col ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.claim-col li {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+    padding-left: var(--space-5);
+    position: relative;
+}
+
+.claim-col li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gray-300);
+}
+
+.claim-col.does li::before {
+    background: var(--success);
+}
+
+.claim-col.does-not li::before {
+    background: var(--error);
+}
+
+.claim-col li strong {
+    color: var(--gray-900);
+    font-weight: 600;
+}
+
+.prose-block {
+    max-width: 76ch;
+}
+
+.prose-block h3 {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-top: var(--space-8);
+    margin-bottom: var(--space-3);
+}
+
+.prose-block p {
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+    margin-bottom: var(--space-4);
+}
+
+.prose-block strong {
+    color: var(--gray-900);
+    font-weight: 600;
+}
+
+@media (max-width: 900px) {
+    .boundary-grid,
+    .claims {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<section class="hero hero-page">
+    <div class="hero-container">
+        <div class="hero-badge">
+            <i data-lucide="shield-check"></i>
+            <span>Security model</span>
+        </div>
+        <h1>What Sandlock Guarantees, and What It Does Not</h1>
+        <p class="subtitle">A sandbox is only useful if you know its edges. This page states the trust boundaries, the guarantees each layer provides, and the attacks that are explicitly out of scope.</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="layers"></i>
+                <span>Trust boundaries</span>
+            </div>
+            <h2 class="section-title">Three Tiers of Trust</h2>
+            <p class="section-subtitle">Sandlock's design principle is that the amount of trust placed in userspace should be as small as the policy allows.</p>
+        </div>
+
+        <div class="boundary-grid">
+            <div class="boundary">
+                <span class="tier">Fully trusted</span>
+                <h3>The host kernel</h3>
+                <p>Landlock rules and the seccomp-bpf filter are evaluated by the kernel. If the kernel is compromised, so is every guarantee on this page. Sandlock shares a kernel with its workload, and that is the fundamental limit of the model.</p>
+            </div>
+
+            <div class="boundary">
+                <span class="tier">Partially trusted</span>
+                <h3>The supervisor</h3>
+                <p>Runs in the parent process, outside the sandbox. It decides on the syscalls the kernel hands it: destination IPs, resource accounting, COW writes. Its handler chain is fixed, with built-ins first, so a custom handler can extend confinement but never relax it.</p>
+            </div>
+
+            <div class="boundary">
+                <span class="tier">Untrusted</span>
+                <h3>The workload</h3>
+                <p>Assumed hostile. It never executes an unconfined instruction: <code class="inline">NO_NEW_PRIVS</code>, Landlock, and the seccomp filter are all installed before <code class="inline">exec</code>, and inherited descriptors above stderr are closed first.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="check-check"></i>
+                <span>Scope</span>
+            </div>
+            <h2 class="section-title">In Scope and Out of Scope</h2>
+        </div>
+
+        <div class="claims">
+            <div class="claim-col does">
+                <h3><i data-lucide="shield-check"></i>Sandlock defends against</h3>
+                <ul>
+                    <li><strong>Filesystem escape.</strong> A confined process can only open paths reachable through the granted Landlock rules. Denied paths override broader grants, and grants are recursive so there is no gap to walk through.</li>
+                    <li><strong>Unapproved network egress.</strong> Default-deny. With no rules, every TCP connect is refused by Landlock, and UDP, ICMP, and raw socket creation are refused at the seccomp layer.</li>
+                    <li><strong>Data exfiltration to an approved host on an unapproved path.</strong> HTTP rules match method, host, and path, so an agent permitted to call one endpoint cannot repurpose the connection.</li>
+                    <li><strong>Credential theft by the workload.</strong> The secret lives in the supervisor and is attached in the proxy after the ACL check. With <code class="inline">env:</code> sources, the variable is stripped from the child's environment.</li>
+                    <li><strong>Privilege escalation via setuid.</strong> <code class="inline">NO_NEW_PRIVS</code> is set before the filter, so a setuid binary confers nothing.</li>
+                    <li><strong>Reaching sibling processes.</strong> Landlock's ABI v6 scopes deny abstract UNIX socket connections and signals to processes outside the sandbox.</li>
+                    <li><strong>Resource exhaustion of the host.</strong> Memory, concurrent processes, open files, CPU percentage, and COW disk usage are all capped.</li>
+                    <li><strong>Unintended writes.</strong> Copy-on-write stages writes in an upper layer, committed on success and discarded on error, so a failed run leaves the tree untouched.</li>
+                </ul>
+            </div>
+
+            <div class="claim-col does-not">
+                <h3><i data-lucide="shield-off"></i>Sandlock does not defend against</h3>
+                <ul>
+                    <li><strong>Kernel vulnerabilities.</strong> The workload runs on your kernel. A privilege-escalation bug in a syscall the policy permits defeats the sandbox. This is the price of not using a hypervisor.</li>
+                    <li><strong>Hardware side channels.</strong> Spectre-class attacks, cache timing, and other microarchitectural leaks are out of scope. CPU pinning reduces sharing but is not a mitigation.</li>
+                    <li><strong>A policy that grants too much.</strong> <code class="inline">--net-allow '*'</code> permits any destination; <code class="inline">-w /</code> grants the filesystem. Sandlock enforces the policy you wrote, not the one you meant.</li>
+                    <li><strong>A hostile supervisor host.</strong> If an attacker already controls the process that launches Sandlock, they control the policy.</li>
+                    <li><strong>Denial of service against itself.</strong> A workload can spin, thrash, or wedge on its own limits. Limits protect the host, not the workload's own progress.</li>
+                    <li><strong>Open-file limits as confinement.</strong> <code class="inline">max_open_files</code> is enforced with <code class="inline">RLIMIT_NOFILE</code>. A sandbox launched by root or with <code class="inline">CAP_SYS_RESOURCE</code> can raise it again; treat it as a budget, not a boundary.</li>
+                    <li><strong>Covert channels between sandboxes.</strong> Two sandboxes on the same host share timing, disk, and memory bandwidth.</li>
+                    <li><strong>Packet crafting needs.</strong> Raw ICMP sockets are never exposed, by design. This is a deliberate reduction in capability, not an oversight.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-container narrow">
+        <div class="section-header left">
+            <div class="section-badge">
+                <i data-lucide="clock-alert"></i>
+                <span>Design detail</span>
+            </div>
+            <h2 class="section-title">Time-of-Check to Time-of-Use</h2>
+        </div>
+
+        <div class="prose-block">
+            <p>Seccomp user notification has a well-known hazard, documented in <code class="inline">seccomp_unotify(2)</code>: after the supervisor returns a continue verdict, <strong>the kernel re-reads any argument the syscall passed by pointer</strong>. A supervisor that inspects a path string and then allows the call has validated a string the workload is free to overwrite in the interval. Filtering on path strings in userspace is therefore unsound, no matter how carefully it is written.</p>
+            <p>Sandlock addresses this in two ways rather than papering over it.</p>
+
+            <h3>Path strings are never exposed to policy callbacks</h3>
+            <p>Policy events carry the syscall name, category, PID, network destination, and argv, but never a path. Path-based access control belongs in static Landlock rules, where the kernel resolves the path itself at access time and no window exists. For decisions that genuinely have to be made at runtime, the policy context offers <code class="inline">deny_path()</code> and <code class="inline">allow_path()</code>, which add Landlock-side restrictions rather than filtering strings.</p>
+
+            <h3>argv is exposed, and it is made safe first</h3>
+            <p>Command lines are too useful to withhold, so Sandlock makes them safe instead. Before exposing <code class="inline">argv</code> for an <code class="inline">execve</code>, the supervisor <strong>freezes every task in its process index</strong>, including peer processes that could alias the argv memory through a shared mapping. While a policy callback is active, fork-like syscalls are traced for one creation event so that children are registered before they can run user code.</p>
+            <p>If the freeze or the creation tracking cannot be established, for instance because a YAMA policy blocks ptrace, <strong>the syscall is denied with <code class="inline">EPERM</code></strong>. The safety invariant is never silently relaxed in favour of letting the workload proceed.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="section-container narrow">
+        <div class="section-header left">
+            <div class="section-badge">
+                <i data-lucide="toggle-left"></i>
+                <span>Defaults</span>
+            </div>
+            <h2 class="section-title">Strict by Default, Explicit to Weaken</h2>
+        </div>
+
+        <div class="prose-block">
+            <p>Sandlock starts from deny and requires you to open things up. This matters because the failure mode of a permissive default is silent: nothing breaks, and you learn about the gap from an incident rather than from an error.</p>
+
+            <h3>Network</h3>
+            <p>With no network rules, Landlock denies every TCP connect, and UDP, ICMP, and raw socket creation are denied at the seccomp layer. Protocol availability follows rule presence: no UDP rule means UDP sockets cannot be created at all. Unrestricted egress requires writing <code class="inline">--net-allow '*'</code> explicitly, and ICMP still needs its own <code class="inline">icmp://</code> rule on top of that.</p>
+
+            <h3>Filesystem</h3>
+            <p>With no filesystem rules, nothing is readable or writable beyond what the process already holds open. There is no implicit grant for <code class="inline">/usr</code>, <code class="inline">/lib</code>, or anything else, which is why every example on this site names them.</p>
+
+            <h3>Syscalls</h3>
+            <p>The default blocklist is applied unconditionally and cannot be turned off. A policy can add denials on top of it. Re-enabling is limited to named groups such as System V IPC, and unknown group names are rejected rather than ignored, so a typo fails loudly.</p>
+
+            <h3>Missing kernel protections</h3>
+            <p>By default Sandlock enforces every Landlock protection the host supports and <strong>refuses to start when a protection it expects is unavailable</strong>. Waiving one is a per-protection, explicit decision: <code class="inline">allow_degraded</code> enforces it where the kernel supports it and skips it where it does not, and <code class="inline">disable</code> turns it off outright. The resolved posture is part of a sandbox's checkpoint, so a restored sandbox comes back with the protections it was built with, not the ones the new host happens to offer.</p>
+            <p><code class="inline">sandlock check</code> reports the host's Landlock ABI and per-protection availability before you deploy.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-container narrow">
+        <div class="section-header left">
+            <div class="section-badge">
+                <i data-lucide="key-round"></i>
+                <span>Secrets</span>
+            </div>
+            <h2 class="section-title">Credential Handling</h2>
+        </div>
+
+        <div class="prose-block">
+            <p>The point of credential injection is that a workload can use a secret without ever holding it. The secret is loaded into the supervisor from an environment variable, a file, or a file descriptor, and attached to a matching outbound request inside the proxy, <strong>strictly after the ACL check has passed</strong>. A request the policy would reject never gets the credential attached to it.</p>
+            <p>Three properties are worth stating plainly:</p>
+            <p><strong>The child does not carry the value.</strong> With an <code class="inline">env:</code> source, the variable is stripped from the child's environment, so a compromised agent cannot read its own key back. With <code class="inline">fd:</code>, the secret never touches disk at all.</p>
+            <p><strong>Cleartext HTTP is a warning, not a silent failure.</strong> Attaching a credential over plain HTTP sends it to the upstream in the clear. Sandlock emits a one-per-run warning rather than pretending the transport is safe.</p>
+            <p><strong>The MITM CA's private key stays in memory.</strong> With <code class="inline">--http-inject-ca</code>, Sandlock generates an ephemeral CA whose private key is never written to disk, and splices only the public certificate into the trust bundles you name, at open time.</p>
+            <p>Sandlock deliberately ships no secret-manager client. An external fetcher materializes the value into a <code class="inline">file:</code> or <code class="inline">fd:</code> source, which keeps it off <code class="inline">ps</code>, out of shell history, and out of the child's environment, and lets you use Vault, a cloud secret store, or a CSI driver without Sandlock having an opinion.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section section-dark">
+    <div class="section-container narrow">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="bug"></i>
+                <span>Disclosure</span>
+            </div>
+            <h2 class="section-title">Reporting a Vulnerability</h2>
+            <p class="section-subtitle">If you believe you have found a way to escape a Sandlock policy, we want to hear about it before anyone else does.</p>
+        </div>
+
+        <div class="text-center">
+            <p style="color: rgba(255,255,255,0.6); font-size: var(--text-base); line-height: var(--leading-relaxed); max-width: 60ch; margin: 0 auto var(--space-8);">
+                Email <a href="mailto:contact@multikernel.io" style="color: var(--accent-400)">contact@multikernel.io</a> with a description and, where possible, a reproducer. Please do not open a public issue for a suspected escape until we have had a chance to respond.
+            </p>
+            <div class="button-group">
+                <a href="mailto:contact@multikernel.io" class="btn btn-primary">
+                    <i data-lucide="mail"></i>
+                    Report Privately
+                </a>
+                <a href="https://github.com/multikernel/sandlock/issues" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+                    <i data-lucide="github"></i>
+                    Non-Security Issues
+                </a>
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,238 @@
+---
+layout: doc
+title: "Network Model"
+description: "Sandlock's network policy: the allowlist and denylist grammar, protocol gating, DNS resolution, bind ports, port virtualization, and the two enforcement paths."
+permalink: /docs/network.html
+short_title: "Network Model"
+heading: "Network Model"
+lede: "Outbound traffic is gated by a list of rules naming protocol, destination, and port. The default is deny, and the shape of the rules you write determines whether the kernel or the supervisor enforces them."
+---
+
+<h2>The defaults</h2>
+
+<p>With no network rules and no HTTP ACL flags:</p>
+
+<ul>
+    <li>Landlock denies every TCP <code class="inline">connect()</code>.</li>
+    <li>UDP, ICMP, and raw socket <em>creation</em> are denied at the seccomp layer, so the workload cannot even open the socket.</li>
+    <li>There is no on-behalf path active, so nothing is intercepted and nothing is proxied.</li>
+</ul>
+
+<p>Unrestricted TCP and UDP egress is opt-in and explicit: <code class="inline">--net-allow '*'</code>. ICMP is never implied by it and needs its own <code class="inline">--net-allow 'icmp://*'</code>.</p>
+
+<h2>Rule grammar</h2>
+
+<p><code class="inline">--net-allow</code> (allowlist) and <code class="inline">--net-deny</code> (denylist) share one grammar and are mutually exclusive. Both flags repeat.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Grammar</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>&lt;spec&gt;     repeatable; the port is optional (a bare target = all ports)
+  target   host | &lt;ip&gt; | &lt;cidr&gt; | *           (`*` or empty target = any IP)
+  forms    target[:port[,port,...]] · :port · host:* · :* · *:*
+           [&lt;ipv6|cidr&gt;]:port                  (bracket IPv6 when a port follows)
+  scheme   none = tcp + udp · tcp:// · udp:// (`udp://*` = any UDP) · icmp:// (no port)
+
+  --net-allow  target may also be a hostname, resolved via DNS at start
+  --net-deny   target must be a literal IP/CIDR (no hostnames; use --http-deny)</code></pre>
+</div>
+
+<p>A few consequences worth stating plainly.</p>
+
+<p><strong>A scheme-less rule covers both TCP and UDP.</strong> It expands into one rule per protocol at parse time. Naming a scheme pins the rule to that one protocol. ICMP is never implied and always needs <code class="inline">icmp://</code>.</p>
+
+<p><strong>A comma groups ports within one rule.</strong> <code class="inline">host:80,443</code> is a single rule covering two ports. To express several independent rules, repeat the flag.</p>
+
+<p><strong>IP and CIDR targets never touch DNS.</strong> They are matched by containment, with an IP literal being a <code class="inline">/32</code> or <code class="inline">/128</code>. Only hostnames resolve.</p>
+
+<p><strong>Rules are OR'd.</strong> A destination is permitted if some rule matches the socket's protocol, plus the destination IP and port. Port is not applicable for ICMP.</p>
+
+<h2>Allowlist examples</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Outbound allowlist</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># One host, one port</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --net-allow <span class="s">api.openai.com:443</span> \
+    -r /usr -r /lib -r /etc -- python3 agent.py
+
+<span class="c"># Two ports for one host, plus a separate any-IP port</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --net-allow <span class="s">github.com:22,443</span> --net-allow <span class="s">:8080</span> \
+    -r /usr -r /lib -r /etc -- python3 agent.py
+
+<span class="c"># A bare host (or host:*) permits every port</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --net-allow <span class="s">github.com</span> \
+    -r /usr -r /lib -r /etc -- ssh user@github.com
+
+<span class="c"># IP, CIDR, or bracketed IPv6 literal; matched by containment</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --net-allow <span class="s">10.0.0.0/8:443</span> \
+    --net-allow <span class="s">'[2606:4700::/32]:443'</span> \
+    -r /usr -r /lib -r /etc -- python3 agent.py
+
+<span class="c"># Pin protocols: UDP DNS to one resolver, TCP HTTPS anywhere</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --net-allow <span class="s">udp://1.1.1.1:53</span> --net-allow <span class="s">tcp://:443</span> \
+    -r /usr -r /lib -r /etc -- ./client
+
+<span class="c"># Ping: kernel ping socket, gated by net.ipv4.ping_group_range</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --net-allow <span class="s">icmp://github.com</span> \
+    -r /usr -r /lib -r /etc -- ping github.com
+
+<span class="c"># Fully open TCP and UDP; ICMP still needs its own rule</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --net-allow <span class="s">'*'</span> \
+    -r /usr -r /lib -r /etc -- ./client</code></pre>
+</div>
+
+<h2>Denylist</h2>
+
+<p><code class="inline">--net-deny</code> inverts the model: networking is default-allow and the listed targets are blocked. The grammar is identical, with one restriction: <strong>targets must be literal IPs or CIDRs</strong>. Hostnames are rejected, because a name-based denial would be trivially bypassed by resolving the name yourself. For domain-level denial use <code class="inline">--http-deny</code>.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Denylist forms</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>--net-deny 10.0.0.0/8               <span class="c"># all ports on a CIDR (TCP and UDP)</span>
+--net-deny 169.254.169.254:80       <span class="c"># one IP, one port (TCP and UDP)</span>
+--net-deny 169.254.169.254:80,443   <span class="c"># comma-separated ports in one rule</span>
+--net-deny <span class="s">'*'</span>                      <span class="c"># any IP, all ports (TCP and UDP)</span>
+--net-deny <span class="s">'udp://192.168.0.0/16'</span>   <span class="c"># UDP only, to a CIDR</span>
+--net-deny <span class="s">'tcp://10.0.0.1:22'</span>      <span class="c"># TCP only, one IP and port</span></code></pre>
+</div>
+
+<div class="callout">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>Denylists are a weaker posture.</strong> An allowlist fails closed when you forget something; a denylist fails open. The canonical use for <code class="inline">--net-deny</code> is blocking the cloud metadata endpoint and RFC 1918 space for a workload that otherwise needs general internet access. Prefer <code class="inline">--net-allow</code> whenever you can enumerate the destinations.</p>
+    </div>
+</div>
+
+<h2>Protocol gating</h2>
+
+<p>Which protocols the workload can use at all falls out of which schemes appear in the rules. This is not a separate setting.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Condition</th>
+                <th scope="col">Effect</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row">No UDP rule</th><td>UDP socket creation is denied at the seccomp layer. A scheme-less rule counts as a UDP rule.</td></tr>
+            <tr><th scope="row">No ICMP rule</th><td>Kernel ping socket creation (<code>SOCK_DGRAM</code> + <code>IPPROTO_ICMP</code>) is denied at the seccomp layer.</td></tr>
+            <tr><th scope="row">Raw ICMP</th><td>Never exposed, under any policy. Packet crafting is out of scope.</td></tr>
+            <tr><th scope="row">TCP</th><td>Always permitted at the syscall level; destinations are governed by Landlock or the on-behalf path.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>Workloads that need ping should rely on the host's <code class="inline">net.ipv4.ping_group_range</code> and use the datagram path with <code class="inline">--net-allow icmp://...</code>.</p>
+
+<h2>Name resolution</h2>
+
+<p>Only hostname targets touch DNS. They are resolved <strong>once, at sandbox start</strong>, and pinned in a synthetic <code class="inline">/etc/hosts</code> across every protocol. The workload therefore cannot make the sandbox reach a different address by manipulating resolution later.</p>
+
+<p>The synthetic file replaces the real one <em>only</em> when at least one rule names a concrete hostname. A policy made entirely of IPs, CIDRs, <code class="inline">:port</code> rules, <code class="inline">udp://*</code>, or <code class="inline">icmp://*</code> leaves the real <code class="inline">/etc/hosts</code> and the host's DNS configuration visible.</p>
+
+<h2>Wildcards</h2>
+
+<p><strong>Hostnames are matched literally.</strong> <code class="inline">--net-allow *.example.com:443</code> is not supported. List each domain you need, or use a CIDR or IP target to cover an address range.</p>
+
+<p>The <code class="inline">*</code> token is allowed in two places: as the target, where it is an alias for empty (<code class="inline">*:port</code> is the same as <code class="inline">:port</code>), and as the port for TCP and UDP rules (<code class="inline">host:*</code>, <code class="inline">:*</code>, <code class="inline">*:*</code>).</p>
+
+<p>Because the port is optional, <code class="inline">host</code> and <code class="inline">host:*</code> are the same rule, and <code class="inline">*</code>, <code class="inline">:*</code>, and <code class="inline">*:*</code> are all the same rule. Mixing the wildcard with concrete ports, as in <code class="inline">host:80,*</code>, is rejected.</p>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>All-ports wildcards change the enforcement path.</strong> Landlock cannot express "every port" without enumerating 65535 rules, so when any TCP rule uses the all-ports wildcard, Landlock stops filtering TCP connect and the on-behalf path becomes the sole enforcer. For the bare <code class="inline">:*</code> case it short-circuits to allow-all.</p>
+    </div>
+</div>
+
+<h2>Enforcement paths</h2>
+
+<p>Sandlock picks the cheapest path that can express your rules. You do not choose this; it follows from the policy.</p>
+
+<h3>Direct path</h3>
+
+<p>Selected for pure <code class="inline">:port</code> TCP policies, meaning any IP and no concrete host, IP, or CIDR, with no HTTP ACL. Landlock enforces the TCP port allowlist in the kernel, and there is no per-syscall overhead. UDP and ICMP are never covered by Landlock and always take the other path when they are allowed at all.</p>
+
+<h3>On-behalf path</h3>
+
+<p>Selected for any host, IP, or CIDR target, any HTTP ACL rule, or any UDP or ICMP rule, because the destination IP has to be checked and Landlock cannot do that.</p>
+
+<p>Seccomp traps <code class="inline">connect()</code>, <code class="inline">sendto()</code>, <code class="inline">sendmsg()</code>, and <code class="inline">sendmmsg()</code>. The supervisor duplicates the child's descriptor, queries <code class="inline">getsockopt(SOL_SOCKET, SO_PROTOCOL)</code> to learn whether the socket is TCP, UDP, or ICMP, checks the destination against that protocol's resolved allowlist, and then performs the syscall itself. Acting on the duplicated descriptor rather than on an address read out of the workload's memory is what makes this TOCTOU-safe. The HTTP and HTTPS proxy redirect, when configured, happens here.</p>
+
+<h2>Binding ports</h2>
+
+<p>Server-side <code class="inline">bind()</code> is governed separately from outbound traffic. <code class="inline">--net-allow-bind</code> is a default-deny allowlist and has no relationship to <code class="inline">--net-allow</code>.</p>
+
+<p>Each value is a comma-separated list of single ports or inclusive <code class="inline">lo-hi</code> ranges, and the flag repeats. The <code class="inline">'*'</code> wildcard allows binding any port, including an ephemeral <code class="inline">bind(0)</code>; it cannot be mixed with port lists, though repeating the bare wildcard is fine.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Bind rules</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> --net-allow-bind 8080,9000-9005 \
+    -r /usr -r /lib -r /etc -- python3 server.py</code></pre>
+</div>
+
+<p>Landlock enforces the allowlist, TCP only; UDP <code class="inline">bind()</code> is not separately gated. The wildcard simply leaves Landlock's <code class="inline">BIND_TCP</code> hook unhandled.</p>
+
+<p><code class="inline">--net-deny-bind</code> is the inverse: binding is default-allow and the listed TCP ports are denied. Same port syntax, mutually exclusive with <code class="inline">--net-allow-bind</code>. Because Landlock is allowlist-only, a deny-bind relaxes the <code class="inline">BIND_TCP</code> hook and enforces the denylist on the on-behalf seccomp <code class="inline">bind()</code> path instead.</p>
+
+<h2>Port virtualization</h2>
+
+<p>With <code class="inline">--port-remap</code>, each sandbox gets a full virtual port space, so several sandboxes can bind the same port without colliding. The supervisor performs the <code class="inline">bind()</code> on behalf of the child using <code class="inline">pidfd_getfd</code>, which is TOCTOU-safe. When a port is already taken, a different real port is allocated transparently, and <code class="inline">/proc/net/tcp</code> inside the sandbox is filtered to show only that sandbox's own ports.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Two sandboxes, same port</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> --name api.local --port-remap --net-allow-bind 6379 \
+    -r /usr -r /lib -r /etc -- redis-server --port 6379 &amp;
+
+<span class="p">$</span> <span class="k">sandlock run</span> --name web.local --port-remap --net-allow-bind 8080 \
+    -r /usr -r /lib -r /etc -- python3 server.py &amp;
+
+<span class="p">$</span> <span class="k">sandlock ps</span>
+<span class="o">NAME          PID      UPTIME  CMD</span>
+<span class="o">api.local     12345        5m  redis-server --port 6379</span>
+<span class="o">web.local     12346        3m  python3 server.py</span></code></pre>
+</div>
+
+<p>Naming a sandbox with <code class="inline">--name</code> gives it a stable virtual hostname, which is what lets an external reverse proxy such as nginx or envoy route by name to the correct real port. From Python, <code class="inline">sb.ports()</code> returns the <code class="inline">{virtual_port: real_port}</code> mapping while the sandbox is running.</p>
+
+<h2>UNIX sockets</h2>
+
+<p>Abstract AF_UNIX sockets are governed by Landlock's <code class="inline">LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET</code> (ABI v6), which is independent of <code class="inline">--net-allow</code> entirely. The scope prevents a sandbox from connecting to abstract sockets belonging to processes outside it. Filesystem-backed UNIX sockets are governed by the filesystem rules, like any other path.</p>
+
+<h2>Policy fields</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>net_allow</code></th><td><code>allow</code></td><td><code>()</code></td><td>Outbound endpoint allowlist. Empty denies all outbound.</td></tr>
+            <tr><th scope="row"><code>net_allow_bind</code></th><td><code>allow_bind</code></td><td><code>()</code></td><td>TCP ports the sandbox may bind. Default-deny allowlist.</td></tr>
+            <tr><th scope="row"><code>net_deny_bind</code></th><td><code>deny_bind</code></td><td><code>()</code></td><td>TCP ports the sandbox may not bind. Default-allow denylist.</td></tr>
+            <tr><th scope="row"><code>port_remap</code></th><td><code>port_remap</code></td><td><code>False</code></td><td>Transparent TCP port virtualization.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>See <a href="/docs/http-acl.html">HTTP ACL and Credentials</a> for rules above the transport layer, and the <a href="/docs/reference.html#network">reference</a> for the complete field list.</p>

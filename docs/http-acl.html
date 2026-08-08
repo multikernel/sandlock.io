@@ -1,0 +1,275 @@
+---
+layout: doc
+title: "HTTP ACL and Credential Injection"
+description: "Method, host, and path rules through a transparent proxy; zero-config HTTPS interception with an ephemeral CA; and attaching a secret the sandboxed process never sees."
+permalink: /docs/http-acl.html
+short_title: "HTTP ACL"
+heading: "HTTP ACL and Credential Injection"
+lede: "Allowing host:443 lets a workload send anything to that host. HTTP rules narrow it to a method and a path, and credential injection means the workload can use an API key it never holds."
+---
+
+<h2>Rules</h2>
+
+<p>An HTTP rule is a method, a host, and a path with glob matching:</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Rule shape</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>"METHOD host/path"
+
+<span class="s">"GET docs.python.org/*"</span>
+<span class="s">"POST api.openai.com/v1/chat/completions"</span>
+<span class="s">"* */admin/*"</span></code></pre>
+</div>
+
+<p><code class="inline">http_deny</code> rules are checked before <code class="inline">http_allow</code> rules. When either list is non-empty, the supervisor spawns a transparent proxy and redirects the configured ports to it.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">CLI</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    --http-allow <span class="s">"GET docs.python.org/*"</span> \
+    --http-allow <span class="s">"POST api.openai.com/v1/chat/completions"</span> \
+    --http-deny  <span class="s">"* */admin/*"</span> \
+    -r /usr -r /lib -r /etc -- python3 agent.py</code></pre>
+</div>
+
+<h3>Ports open themselves</h3>
+
+<p>You do not have to remember to add matching network rules. A rule naming a concrete host <strong>auto-extends <code class="inline">net_allow</code></strong> with that host on each entry of <code class="inline">http_ports</code>, plus <code class="inline">443</code> when HTTPS interception is enabled, so the proxy's intercept ports are reachable. Wildcard hosts add the equivalent any-IP entries. Every auto-added entry is TCP.</p>
+
+<p><code class="inline">http_ports</code> defaults to <code class="inline">[80]</code>, and <code class="inline">443</code> is added automatically when a CA is configured.</p>
+
+<h2>HTTPS interception</h2>
+
+<p>Rules on paths require reading the request, which over TLS requires terminating it. Sandlock offers three postures.</p>
+
+<h3>No interception (the default)</h3>
+
+<p>Without <code class="inline">--http-ca</code> or <code class="inline">--http-inject-ca</code>, port 443 is not intercepted at all. <code class="inline">--net-allow host:443</code> permits raw TLS to that host with no content inspection, which is the right choice when transport-level control is enough.</p>
+
+<h3>Zero-config: an ephemeral CA</h3>
+
+<p><code class="inline">--http-inject-ca</code> is the option most workloads want. Sandlock generates a CA whose <strong>private key exists only in memory and is never written to disk</strong>, and splices its public certificate into each trust bundle you name, at open time. There is no <code class="inline">openssl</code> invocation and no manual installation step.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Intercept HTTPS with no setup</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    --http-allow <span class="s">"POST api.openai.com/v1/*"</span> \
+    --http-inject-ca /etc/ssl/certs/ca-certificates.crt \
+    -r /usr -r /lib -r /etc -- python3 agent.py</code></pre>
+</div>
+
+<p>File injection reaches anything that reads a trust file from disk: curl, git, the OpenSSL CLI, Go, Python's stdlib <code class="inline">ssl</code>, and Python's <code class="inline">requests</code> and <code class="inline">httpx</code> through certifi's <code class="inline">cacert.pem</code> if you name that path.</p>
+
+<h3>Runtimes with a compiled-in trust store</h3>
+
+<p>Node and Java carry their CA list in the binary, so file injection cannot reach them. Export the public certificate with <code class="inline">--http-ca-out</code> and point the runtime's own environment variable at it.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Node</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    --http-allow <span class="s">"POST api.example.com/*"</span> \
+    --http-inject-ca /etc/ssl/certs/ca-certificates.crt \
+    --http-ca-out /tmp/sandlock-ca.pem \
+    --env NODE_EXTRA_CA_CERTS=/tmp/sandlock-ca.pem \
+    -r /usr -r /lib -r /etc -- node agent.js</code></pre>
+</div>
+
+<p><code class="inline">--http-ca-out</code> writes only the public certificate. The private key is never written, under any option.</p>
+
+<h3>Bring your own CA</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Explicit CA and key</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    --http-allow <span class="s">"POST api.openai.com/v1/*"</span> \
+    --http-ca ca.pem --http-key ca-key.pem \
+    -r /usr -r /lib -r /etc -- python3 agent.py</code></pre>
+</div>
+
+<p>With <code class="inline">--http-ca</code>, the CA must be one you generated and installed into the sandbox's trust store yourself, typically under <code class="inline">/etc/ssl/certs/</code>. <code class="inline">--http-key</code> is required whenever <code class="inline">--http-ca</code> is set.</p>
+
+<h2>Credential injection</h2>
+
+<p>The problem with giving an agent an API key is that the agent then has an API key. Credential injection removes the key from the workload entirely: the secret is loaded into the supervisor and attached to a matching request inside the proxy, <strong>strictly after the ACL check has passed</strong>. A request the policy rejects never gets the credential.</p>
+
+<h3>Loading the secret</h3>
+
+<p><code class="inline">--credential NAME=SOURCE</code> loads it. Three sources are supported:</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Behaviour</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>env:VAR</code></th><td>Read from the environment. <strong>The variable is stripped from the child</strong>, so the workload cannot read it back.</td></tr>
+            <tr><th scope="row"><code>file:PATH</code></th><td>The whole file is the secret; one trailing newline is stripped.</td></tr>
+            <tr><th scope="row"><code>fd:N</code></th><td>Read from a file descriptor. The secret never touches disk.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Attaching it</h3>
+
+<p><code class="inline">--http-auth "METHOD HOST/PATH AUTHSPEC NAME [replace|add-only]"</code> attaches a loaded credential to matching requests. <code class="inline">AUTHSPEC</code> is one of <code class="inline">bearer</code>, <code class="inline">basic:&lt;user&gt;</code>, <code class="inline">header:&lt;name&gt;</code>, <code class="inline">apikey:&lt;name&gt;</code> (an alias of <code class="inline">header:</code>), or <code class="inline">query:&lt;param&gt;</code>.</p>
+
+<p>The default mode, <code class="inline">replace</code>, overwrites an existing credential of that shape, which is what you want for SDKs that always send a placeholder auth header. <code class="inline">add-only</code> leaves a caller-supplied value in place.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">The complete pattern</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    --http-allow <span class="s">"POST api.openai.com/v1/*"</span> \
+    --http-inject-ca /etc/ssl/certs/ca-certificates.crt \
+    --credential openai=env:OPENAI_API_KEY \
+    --http-auth <span class="s">"POST api.openai.com/v1/* bearer openai"</span> \
+    -r /usr -r /lib -r /etc -- python3 agent.py</code></pre>
+</div>
+
+<h3>More shapes</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Header, basic, query, and shared credentials</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># Custom header from a mounted secret file (Anthropic style)</span>
+--credential anthropic=file:/run/secrets/anthropic-key \
+--http-auth <span class="s">"* api.anthropic.com/* header:x-api-key anthropic"</span>
+
+<span class="c"># HTTP Basic with a fixed user-id. A ':' in the user-id is rejected</span>
+<span class="c"># per RFC 7617: it would shift the user:pass boundary and leak part</span>
+<span class="c"># of the secret.</span>
+--credential registry=env:REGISTRY_PASSWORD \
+--http-auth <span class="s">"* registry.internal/* basic:deploy registry"</span>
+
+<span class="c"># Query parameter: the least private shape. The value lands in the</span>
+<span class="c"># upstream's access logs and any Referer. Use only where required.</span>
+--credential maps=file:/run/secrets/maps-key \
+--http-auth <span class="s">"GET maps.example.com/* query:key maps"</span>
+
+<span class="c"># One credential backing several hosts. `add-only` makes the second</span>
+<span class="c"># rule a fallback: a value the agent set itself is kept.</span>
+--credential shared=env:SHARED_TOKEN \
+--http-auth <span class="s">"* a.example.com/* bearer shared"</span> \
+--http-auth <span class="s">"* b.example.com/* header:x-token shared add-only"</span></code></pre>
+</div>
+
+<h3>Requirements and warnings</h3>
+
+<ul>
+    <li>Injection requires an HTTP ACL proxy, meaning at least one <code class="inline">http_allow</code> or <code class="inline">http_deny</code> rule.</li>
+    <li>Injecting into an HTTPS host additionally requires <code class="inline">--http-ca</code> or <code class="inline">--http-inject-ca</code>, so the proxy can intercept port 443.</li>
+    <li>Over cleartext HTTP the secret is sent to the upstream in plaintext. Sandlock emits a one-per-run warning rather than treating the transport as safe.</li>
+    <li><code class="inline">--credential</code> and <code class="inline">--http-auth</code> are CLI and builder flags. They are not <code class="inline">[config]</code> profile keys.</li>
+</ul>
+
+<h2>Working with a secret manager</h2>
+
+<p>Sandlock ships no secret-manager client, on purpose. An external fetcher materializes the value into a <code class="inline">file:</code> or <code class="inline">fd:</code> source, which keeps it off <code class="inline">ps</code>, out of shell history, and out of the child's environment, and lets the same mechanism work with Vault, a cloud secret store, or a CSI driver.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Vault through a file descriptor</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># fd: via process substitution. The fetcher writes to fd 3, sandlock</span>
+<span class="c"># reads it through a dup, and the child never sees it.</span>
+<span class="p">$</span> <span class="k">sandlock run</span> \
+    --http-allow <span class="s">"POST api.internal/*"</span> \
+    --http-inject-ca /etc/ssl/certs/ca-certificates.crt \
+    --credential api=fd:3 \
+    --http-auth <span class="s">"POST api.internal/* bearer api"</span> \
+    3&lt; &lt;(vault read -field=token secret/data/api) \
+    -r /usr -r /lib -r /etc -- python3 agent.py
+
+<span class="c"># file: from a Vault Agent sidecar or CSI driver rendering onto tmpfs</span>
+<span class="p">$</span> <span class="k">sandlock run</span> \
+    --http-allow <span class="s">"* api.internal/*"</span> \
+    --http-inject-ca /etc/ssl/certs/ca-certificates.crt \
+    --credential api=file:/vault/secrets/api-key \
+    --http-auth <span class="s">"* api.internal/* bearer api"</span> \
+    -r /usr -r /lib -r /etc -- python3 agent.py</code></pre>
+</div>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>Leased and rotating secrets are out of scope.</strong> The secret is loaded once at supervisor start, so a rotated value is picked up only on the next <code class="inline">sandlock run</code>. If your credential has a short TTL, restart the sandbox on rotation rather than expecting Sandlock to notice.</p>
+    </div>
+</div>
+
+<h2>From the SDKs</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
+
+agent = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    http_allow=[<span class="s">"POST api.openai.com/v1/chat/completions"</span>],
+    http_deny=[<span class="s">"* */admin/*"</span>],
+)
+result = agent.run([<span class="s">"python3"</span>, <span class="s">"agent.py"</span>])</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">let mut</span> agent = Sandbox::builder()
+    .fs_read(<span class="s">"/usr"</span>).fs_read(<span class="s">"/lib"</span>).fs_read(<span class="s">"/etc"</span>)
+    .http_allow(<span class="s">"POST api.openai.com/v1/chat/completions"</span>)
+    .http_deny(<span class="s">"* */admin/*"</span>)
+    .name(<span class="s">"agent-box"</span>)
+    .build()?;
+<span class="k">let</span> result = agent.run(&amp;[<span class="s">"python3"</span>, <span class="s">"agent.py"</span>]).<span class="k">await</span>?;</code></pre>
+</div>
+
+<h2>Policy fields</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>http_allow</code></th><td><code>[http].allow</code></td><td><code>()</code></td><td>Allow rules, <code>"METHOD host/path"</code> with glob path matching</td></tr>
+            <tr><th scope="row"><code>http_deny</code></th><td><code>[http].deny</code></td><td><code>()</code></td><td>Deny rules, checked first. Same format.</td></tr>
+            <tr><th scope="row"><code>http_ports</code></th><td><code>[http].ports</code></td><td><code>[80]</code></td><td>TCP ports to intercept; <code>443</code> added when a CA is set</td></tr>
+            <tr><th scope="row"><code>http_ca</code></th><td><code>[config].http_ca</code></td><td><code>None</code></td><td>PEM CA certificate for HTTPS interception</td></tr>
+            <tr><th scope="row"><code>http_key</code></th><td><code>[config].http_key</code></td><td><code>None</code></td><td>PEM CA private key; required with <code>http_ca</code></td></tr>
+            <tr><th scope="row"><code>http_inject_ca</code></th><td><code>[config].http_inject_ca</code></td><td><code>[]</code></td><td>Trust bundles to splice the active CA's public cert into</td></tr>
+            <tr><th scope="row"><code>http_ca_out</code></th><td><code>[config].http_ca_out</code></td><td><code>None</code></td><td>Write the active CA's public certificate here</td></tr>
+        </tbody>
+    </table>
+</div>

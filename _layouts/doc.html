@@ -1,0 +1,82 @@
+---
+layout: default
+---
+{%- comment -%}
+  Flatten _data/docs.yml into reading order so the pager can find the
+  neighbours of the current page without each page hardcoding them.
+{%- endcomment -%}
+{%- assign flat_urls = '' -%}
+{%- assign flat_titles = '' -%}
+{%- for group in site.data.docs.groups -%}
+  {%- for item in group.items -%}
+    {%- assign flat_urls = flat_urls | append: item.url | append: '|' -%}
+    {%- assign flat_titles = flat_titles | append: item.title | append: '|' -%}
+  {%- endfor -%}
+{%- endfor -%}
+{%- assign urls = flat_urls | split: '|' -%}
+{%- assign titles = flat_titles | split: '|' -%}
+{%- assign here = -1 -%}
+{%- for u in urls -%}
+  {%- if u == page.url -%}{%- assign here = forloop.index0 -%}{%- endif -%}
+{%- endfor -%}
+
+<div class="docs-shell">
+    <button class="docs-nav-toggle" aria-expanded="false">
+        <i data-lucide="list"></i>
+        Documentation menu
+    </button>
+
+    <aside class="docs-sidebar" aria-label="Documentation">
+        {% for group in site.data.docs.groups %}
+        <div class="docs-sidebar-group">
+            <div class="docs-sidebar-title">{{ group.title }}</div>
+            {% for item in group.items %}
+            <a href="{{ item.url }}" class="{% if item.url == page.url %}active{% endif %}">{{ item.title }}</a>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </aside>
+
+    <article class="docs-main">
+        <div class="docs-breadcrumb">
+            <a href="/">Sandlock</a>
+            <span>/</span>
+            <a href="/docs/">Docs</a>
+            {% if page.url != '/docs/' %}<span>/</span><span>{{ page.short_title | default: page.heading }}</span>{% endif %}
+        </div>
+
+        <header class="docs-header">
+            <h1>{{ page.heading }}</h1>
+            {% if page.lede %}<p class="docs-lede">{{ page.lede }}</p>{% endif %}
+        </header>
+
+        <div class="prose">
+            {{ content }}
+        </div>
+
+        {% if here >= 0 %}
+        <nav class="docs-pager" aria-label="Documentation pages">
+            {% if here > 0 %}
+            {%- assign prev_i = here | minus: 1 -%}
+            <a href="{{ urls[prev_i] }}" class="docs-next-link prev">
+                <span class="dir">Previous</span>
+                <span class="label">{{ titles[prev_i] }}</span>
+            </a>
+            {% endif %}
+            {%- assign last = urls.size | minus: 1 -%}
+            {% if here < last %}
+            {%- assign next_i = here | plus: 1 -%}
+            <a href="{{ urls[next_i] }}" class="docs-next-link next">
+                <span class="dir">Next</span>
+                <span class="label">{{ titles[next_i] }}</span>
+            </a>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </article>
+
+    <aside class="docs-toc" aria-label="On this page">
+        <div class="docs-toc-title">On this page</div>
+        <ul></ul>
+    </aside>
+</div>

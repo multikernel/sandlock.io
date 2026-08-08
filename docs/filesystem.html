@@ -1,0 +1,254 @@
+---
+layout: doc
+title: "Filesystem and Copy-on-Write"
+description: "Landlock read, write, and deny rules; chroot and per-sandbox mounts without root; and Sandlock's copy-on-write layer with commit, abort, and dry-run."
+permalink: /docs/filesystem.html
+short_title: "Filesystem and COW"
+heading: "Filesystem and Copy-on-Write"
+lede: "Two mechanisms with different jobs. Landlock decides what the workload may reach, enforced by the kernel and immune to TOCTOU. Copy-on-write decides what happens to the writes it makes."
+---
+
+<h2>Access rules</h2>
+
+<p>Three lists describe filesystem access. All of them take paths, all of them are recursive, and all of them are compiled into a Landlock ruleset applied before the workload executes.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">CLI</th>
+                <th scope="col">Meaning</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>fs_readable</code></th><td><code>read</code></td><td><code>-r</code></td><td>Readable, in addition to anything writable</td></tr>
+            <tr><th scope="row"><code>fs_writable</code></th><td><code>write</code></td><td><code>-w</code></td><td>Readable and writable</td></tr>
+            <tr><th scope="row"><code>fs_denied</code></th><td><code>deny</code></td><td>&mdash;</td><td>Neither, even where a broader rule would allow it</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The default for all three is empty, and empty means <strong>no access at all</strong>. There is no implicit grant for <code class="inline">/usr</code> or <code class="inline">/lib</code>, which is why every example names them: without them, the dynamic linker cannot load and nothing runs.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">A working envelope</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    -r /usr -r /lib -r /lib64 -r /bin -r /etc \
+    -w /tmp/work \
+    -- ./task.sh</code></pre>
+</div>
+
+<h3>Grants are recursive</h3>
+
+<p>Each rule becomes a Landlock <code class="inline">PATH_BENEATH</code> grant, so <code class="inline">-r /usr</code> covers everything under <code class="inline">/usr</code>. Listing both an ancestor and a descendant is redundant, and a generated profile removes the descendant during its deduplication step for exactly this reason.</p>
+
+<h3>Denials override grants</h3>
+
+<p><code class="inline">fs_denied</code> exists for the case where a workload legitimately needs a broad grant but must not reach one thing inside it.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Broad read, one hole punched out</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
+
+sandbox = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/proc"</span>],
+    fs_denied=[<span class="s">"/proc/kcore"</span>],
+)</code></pre>
+</div>
+
+<h3>Why this is TOCTOU-safe</h3>
+
+<p>The kernel resolves the path itself, at access time, against a ruleset it holds. Nothing in the decision depends on a string that userspace read out of the workload's memory, so there is no window in which the workload can swap the target after the check. This is the reason Sandlock puts path-based control in Landlock and <a href="/docs/policy.html#no-paths-on-events">refuses to expose path strings to policy callbacks</a>.</p>
+
+<h2>chroot and per-sandbox mounts</h2>
+
+<p><code class="inline">chroot</code> changes the root the workload sees before the rest of the confinement is applied. <code class="inline">fs_mount</code> then maps virtual paths inside that root onto host directories, which gives you Docker-style volume mapping <strong>without a kernel bind mount and without root</strong>: the supervisor mediates the mapping on the intercepted open path.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">CLI</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> --chroot ./rootfs \
+    --fs-mount /work:/tmp/sandbox/work \
+    -- /bin/sh</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>chrooted = Sandbox(
+    chroot=<span class="s">"/opt/rootfs"</span>,
+    fs_mount={<span class="s">"/work"</span>: <span class="s">"/tmp/sandbox-1/work"</span>},
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/bin"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    cwd=<span class="s">"/work"</span>,
+)
+result = chrooted.run([<span class="s">"python3"</span>, <span class="s">"task.py"</span>])</code></pre>
+</div>
+
+<div class="callout">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>Read-only mounts are CLI and TOML only.</strong> A trailing <code class="inline">:ro</code> (the default being <code class="inline">:rw</code>) selects a read-only mount, and <code class="inline">sandlock inspect --toml</code> writes it back out. The Python SDK rejects such entries with <code class="inline">PolicyError</code>, because its mapping type cannot express the flag. Load the profile through the CLI with <code class="inline">--profile-file</code>, or use the C ABI's <code class="inline">sandlock_sandbox_builder_fs_mount_ro</code>.</p>
+    </div>
+</div>
+
+<h2>Copy-on-write</h2>
+
+<p>Setting <code class="inline">workdir</code> puts a copy-on-write layer over that directory. Writes underneath it are intercepted through seccomp notification and staged in an upper layer; reads resolve upper first, then fall through to the real directory. There is no mount namespace, no user namespace, and no root involved.</p>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong><code class="inline">workdir</code> is not <code class="inline">cwd</code>.</strong> <code class="inline">workdir</code> chooses which directory COW tracks. <code class="inline">cwd</code> chooses the child's working directory. They are independent, and a policy commonly sets one without the other.</p>
+    </div>
+</div>
+
+<h3>Branch actions</h3>
+
+<p>What happens to the staged writes when the sandbox ends is a policy decision, taken separately for the success and the failure case.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Default</th>
+                <th scope="col">When it applies</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>on_exit</code></th><td><code>commit</code></td><td>Normal sandbox exit</td></tr>
+            <tr><th scope="row"><code>on_error</code></th><td><code>abort</code></td><td>Sandbox error or exception</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The three actions are <code class="inline">commit</code>, which merges the branch's writes into the parent; <code class="inline">abort</code>, which discards them; and <code class="inline">keep</code>, which leaves the branch in place for the caller to deal with.</p>
+
+<p>The defaults give transactional semantics for free: a build that fails leaves the tree exactly as it found it.</p>
+
+<h3>Storage and quota</h3>
+
+<p><code class="inline">fs_storage</code> puts the upper layer and its deltas somewhere other than the default location, which matters when the working directory lives on a small or slow filesystem. <code class="inline">max_disk</code> caps how large the upper layer may grow; exceeding it surfaces to the workload as <code class="inline">ENOSPC</code>, the same error a full disk would produce.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Staged writes, capped and kept off the source volume</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>[config]
+workdir    = <span class="s">"/opt/project"</span>
+fs_storage = <span class="s">"/var/lib/sandlock"</span>
+
+[filesystem]
+on_exit  = <span class="s">"commit"</span>
+on_error = <span class="s">"abort"</span>
+
+[limits]
+disk = <span class="s">"1G"</span></code></pre>
+</div>
+
+<h2>Dry-run</h2>
+
+<p>Dry-run runs the command for real, inspects the COW layer for what changed, prints a summary, and then aborts the branch. The working directory is left completely untouched, which makes it a way to answer "what would this actually do" without trusting the answer to a description.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">CLI</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> --dry-run --workdir . \
+    -w . -r /usr -r /lib -r /bin -r /etc -- make build
+<span class="o">A  build/out.o</span>
+<span class="o">M  Cargo.lock</span>
+<span class="o">D  build/stale.o</span></code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sandbox = Sandbox(
+    fs_writable=[<span class="s">"."</span>],
+    workdir=<span class="s">"."</span>,
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>],
+)
+result = sandbox.dry_run([<span class="s">"make"</span>, <span class="s">"build"</span>])
+
+<span class="k">for</span> c <span class="k">in</span> result.changes:
+    <span class="k">print</span>(<span class="s">f"{c.kind}  {c.path}"</span>)  <span class="c"># A=added, M=modified, D=deleted</span></code></pre>
+</div>
+
+<p>A <code class="inline">Change</code> carries a <code class="inline">kind</code> of <code class="inline">"A"</code>, <code class="inline">"M"</code>, or <code class="inline">"D"</code>, and a <code class="inline">path</code> relative to the working directory. <code class="inline">DryRunResult</code> also carries <code class="inline">success</code>, <code class="inline">exit_code</code>, <code class="inline">stdout</code>, <code class="inline">stderr</code>, and <code class="inline">error</code>.</p>
+
+<h2>Which syscalls COW intercepts</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Syscall</th>
+                <th scope="col">Why</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>openat</code></th><td>Redirect a write open into the upper layer; resolve reads upper-then-lower</td></tr>
+            <tr><th scope="row"><code>unlinkat</code></th><td>Record a deletion in the branch instead of removing the real file</td></tr>
+            <tr><th scope="row"><code>mkdirat</code></th><td>Create the directory in the upper layer</td></tr>
+            <tr><th scope="row"><code>renameat2</code></th><td>Apply the rename within the branch</td></tr>
+            <tr><th scope="row"><code>getdents64</code></th><td>Merge upper and lower directory listings so the view is consistent</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>COW is only active when <code class="inline">workdir</code> is set. Without it, none of these syscalls are intercepted for filesystem purposes and writes go straight to disk under the Landlock rules.</p>
+
+<h2>Determinism</h2>
+
+<p>Directory order is a common and invisible source of nondeterministic builds. <code class="inline">deterministic_dirs</code> sorts <code class="inline">readdir()</code> results lexicographically, so <code class="inline">ls</code>, <code class="inline">glob</code>, and <code class="inline">os.listdir</code> return a stable order across runs and across machines.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Remove the usual sources of variance</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    --time-start <span class="s">"2000-01-01T00:00:00Z"</span> \
+    --random-seed 42 \
+    --deterministic-dirs \
+    --no-randomize-memory \
+    -- ./build.sh</code></pre>
+</div>
+
+<p>See <a href="/docs/reference.html#determinism">the determinism section</a> of the reference for what each knob does.</p>
+
+<h2>GPU device access</h2>
+
+<p>GPU selection is filesystem policy, not an environment variable. <code class="inline">gpu_devices</code> adds Landlock rules for the chosen <code class="inline">/dev/nvidia*</code> and <code class="inline">/dev/dri/*</code> nodes and sets <code class="inline">CUDA_VISIBLE_DEVICES</code> and <code class="inline">ROCR_VISIBLE_DEVICES</code> to match. Because the boundary is the Landlock rule, <strong>a sandbox given device 0 cannot open any other device node</strong>, whatever the workload does with the environment.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">One GPU, hard boundary</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># The NVIDIA userspace needs the driver libraries readable and</span>
+<span class="c"># writes thread names under /proc/self/task.</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --gpu 0 \
+    -r /usr -r /lib -r /lib64 -r /etc -r /sys -r /proc \
+    -w /proc/self/task \
+    -- python3 train.py</code></pre>
+</div>
+
+<p><code class="inline">--gpu all</code> exposes every device. In the SDKs, <code class="inline">gpu_devices=None</code> denies GPU access entirely, an empty list exposes every GPU, and a list of indices exposes exactly those.</p>

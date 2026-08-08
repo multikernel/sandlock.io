@@ -1,0 +1,44 @@
+# Single source of truth for the docs sidebar and the prev/next pager.
+# Order within this file is the reading order of the documentation.
+groups:
+  - title: Start here
+    items:
+      - url: /docs/
+        title: Overview
+      - url: /docs/getting-started.html
+        title: Getting Started
+      - url: /docs/architecture.html
+        title: Architecture
+
+  - title: Guides
+    items:
+      - url: /docs/filesystem.html
+        title: Filesystem and COW
+      - url: /docs/network.html
+        title: Network Model
+      - url: /docs/http-acl.html
+        title: HTTP ACL and Credentials
+      - url: /docs/policy.html
+        title: Dynamic Policy
+      - url: /docs/profiles.html
+        title: Profiles and learn
+
+  - title: Interfaces
+    items:
+      - url: /docs/cli.html
+        title: CLI Reference
+      - url: /docs/python.html
+        title: Python SDK
+      - url: /docs/rust.html
+        title: Rust API
+      - url: /docs/go.html
+        title: Go SDK
+      - url: /docs/oci.html
+        title: OCI Runtime and Kubernetes
+      - url: /docs/mcp.html
+        title: MCP Server
+
+  - title: Reference
+    items:
+      - url: /docs/reference.html
+        title: Sandbox Reference

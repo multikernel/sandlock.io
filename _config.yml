@@ -1,0 +1,25 @@
+title: Sandlock
+email: contact@multikernel.io
+description: >-
+  Lightweight Linux process sandbox built on Landlock, seccomp-bpf, and seccomp
+  user notification. Confine untrusted code without root, containers, or a hypervisor.
+baseurl: ""
+url: "https://sandlock.io"
+
+# Build settings
+markdown: kramdown
+encoding: utf-8
+permalink: /:year/:month/:day/:title/
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+
+github_pages:
+  cname: sandlock.io
+
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
+  - tools/

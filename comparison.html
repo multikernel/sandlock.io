@@ -1,0 +1,294 @@
+---
+layout: default
+title: "Sandlock vs Containers, MicroVMs, and gVisor"
+description: "An honest comparison of Sandlock against containers, microVMs, gVisor, and bubblewrap, including the cases where Sandlock is the wrong tool."
+permalink: /comparison.html
+---
+
+<style>
+.alt-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--space-5);
+    margin-top: var(--space-8);
+}
+
+.alt-card {
+    padding: var(--space-8);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-top: 2px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+}
+
+.alt-card h3 {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--gray-900);
+    letter-spacing: -0.02em;
+    margin-bottom: var(--space-2);
+}
+
+.alt-card .verdict {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent-700);
+    display: block;
+    margin-bottom: var(--space-4);
+}
+
+.alt-card p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+}
+
+.alt-card p + p {
+    margin-top: var(--space-3);
+}
+
+.alt-card strong {
+    color: var(--gray-900);
+}
+
+.alt-card a {
+    color: var(--accent-700);
+    text-decoration: underline;
+    text-decoration-color: rgba(201, 161, 62, 0.35);
+    text-underline-offset: 2px;
+}
+
+.alt-card a:hover {
+    color: var(--accent-600);
+    text-decoration-color: var(--accent-500);
+}
+
+.not-for {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-5);
+    margin-top: var(--space-8);
+}
+
+.not-for-item {
+    padding: var(--space-6);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-left: 2px solid var(--error);
+    border-radius: var(--radius-md);
+}
+
+.not-for-item h3 {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: white;
+    margin-bottom: var(--space-3);
+}
+
+.not-for-item p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: rgba(255, 255, 255, 0.55);
+}
+</style>
+
+<section class="hero hero-page">
+    <div class="hero-container">
+        <div class="hero-badge">
+            <i data-lucide="git-compare"></i>
+            <span>Comparison</span>
+        </div>
+        <h1>Where Sandlock Fits</h1>
+        <p class="subtitle">Sandlock is not a container runtime with a smaller footprint, and it is not a lightweight VM. It occupies a different point entirely: strict, kernel-enforced confinement of a process, with no image, no privilege, and no boot.</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="table-2"></i>
+                <span>Side by side</span>
+            </div>
+            <h2 class="section-title">Sandlock, Containers, and MicroVMs</h2>
+            <p class="section-subtitle">The measured figures come from Sandlock's own benchmark suite on a typical Linux workstation. Treat them as an order of magnitude, not a guarantee for your hardware.</p>
+        </div>
+
+        <div class="data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Property</th>
+                        <th scope="col" class="col-highlight">Sandlock</th>
+                        <th scope="col">Container</th>
+                        <th scope="col">MicroVM (Firecracker)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row">Root required</th>
+                        <td class="col-highlight"><span class="yes">No</span></td>
+                        <td>Yes<sup>*</sup></td>
+                        <td>Yes (KVM)</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Image build</th>
+                        <td class="col-highlight"><span class="yes">No</span></td>
+                        <td>Yes</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Startup time</th>
+                        <td class="col-highlight">~5 ms</td>
+                        <td>~200 ms</td>
+                        <td>~100 ms</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Kernel</th>
+                        <td class="col-highlight">Shared</td>
+                        <td>Shared</td>
+                        <td>Separate guest</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Filesystem isolation</th>
+                        <td class="col-highlight">Landlock + seccomp COW</td>
+                        <td>Overlay</td>
+                        <td>Block-level</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Network isolation</th>
+                        <td class="col-highlight">Landlock + seccomp notify</td>
+                        <td>Network namespace</td>
+                        <td>TAP device</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">HTTP-level ACL</th>
+                        <td class="col-highlight">Method + host + path rules</td>
+                        <td><span class="no">Not available</span></td>
+                        <td><span class="no">Not available</span></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Syscall filtering</th>
+                        <td class="col-highlight">seccomp-bpf</td>
+                        <td>seccomp</td>
+                        <td><span class="no">Not applicable</span></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Resource limits</th>
+                        <td class="col-highlight">seccomp notify + SIGSTOP</td>
+                        <td>cgroup v2</td>
+                        <td>VM configuration</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="table-note"><sup>*</sup> Rootless containers exist, but they require user-namespace support and a configured <code>/etc/subuid</code>. On a locked-down host, that configuration is itself a privileged operation.</p>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="scale"></i>
+                <span>Adjacent tools</span>
+            </div>
+            <h2 class="section-title">How It Compares to the Neighbours</h2>
+            <p class="section-subtitle">Sandlock overlaps with several well-established tools. Here is where the overlap ends.</p>
+        </div>
+
+        <div class="alt-grid">
+            <div class="alt-card">
+                <h3>gVisor</h3>
+                <span class="verdict">Different boundary, different cost</span>
+                <p>gVisor puts a userspace kernel between the workload and the host, implementing the Linux syscall surface itself. That is a genuinely strong boundary, and it is the right answer when you need to run a full untrusted operating-system image.</p>
+                <p>The cost is that <strong>every syscall is serviced by the Sentry</strong>, and application compatibility depends on how completely the Sentry reimplements the interface. Sandlock leaves the host kernel in the syscall path and only intercepts the small set of calls that carry policy decisions, which is why a Redis workload keeps 97% of its bare-metal throughput.</p>
+            </div>
+
+            <div class="alt-card">
+                <h3>bubblewrap and firejail</h3>
+                <span class="verdict">Same spirit, different mechanism</span>
+                <p>These build a confined view of the system out of mount, PID, and user namespaces. They are unprivileged (given user namespaces) and fast, and for desktop application sandboxing they are excellent.</p>
+                <p>Sandlock differs in that the policy is <strong>an access-control ruleset rather than a constructed namespace</strong>, so there is no filesystem to assemble and no user-namespace requirement. It also covers ground namespaces do not: destination-IP allowlisting, HTTP method and path rules, credential injection, copy-on-write commit and rollback, and a programmable per-syscall policy callback.</p>
+            </div>
+
+            <div class="alt-card">
+                <h3>seccomp filters you write yourself</h3>
+                <span class="verdict">The layer below</span>
+                <p>A hand-written seccomp-bpf filter is precise and free, and Sandlock uses exactly that as one of its layers. What a raw filter cannot do is inspect arguments that live behind a pointer, because the kernel re-reads user memory after the filter runs.</p>
+                <p>That is why <strong>path-based decisions belong in Landlock</strong> and destination-based decisions belong in the supervisor, where the socket can be duplicated and inspected safely. Sandlock's job is to assemble these pieces so the combination is sound rather than plausible-looking.</p>
+            </div>
+
+            <div class="alt-card">
+                <h3>Kubernetes with runc</h3>
+                <span class="verdict">Not either/or</span>
+                <p>If your workloads already ship as OCI images, Sandlock does not ask you to leave that behind. <code class="inline">sandlock-oci</code> implements the OCI runtime interface, so containerd, CRI-O, and the kubelet can drive it in place of <code class="inline">runc</code>.</p>
+                <p>What changes is the enforcement: the result is a <strong>namespace-less, cgroup-less container</strong> confined by Landlock and seccomp, running unprivileged. See the <a href="/docs/oci.html">OCI runtime guide</a> for the spec translation table.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-dark">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="triangle-alert"></i>
+                <span>Honest limits</span>
+            </div>
+            <h2 class="section-title">When Sandlock Is the Wrong Tool</h2>
+            <p class="section-subtitle">Picking the wrong isolation primitive is worse than picking none, because it buys confidence you have not actually earned. These are the cases where you should reach for something else.</p>
+        </div>
+
+        <div class="not-for">
+            <div class="not-for-item">
+                <h3>You need a separate kernel</h3>
+                <p>Sandlock's workload runs on your kernel. A kernel-level vulnerability is a shared risk. If your threat model includes an attacker who will spend a kernel exploit on you, use a hypervisor boundary: a microVM, or Multikernel's per-workload kernel architecture.</p>
+            </div>
+
+            <div class="not-for-item">
+                <h3>You need to boot a system</h3>
+                <p>Sandlock confines processes, not machines. If the thing you are running expects init, systemd, a full device tree, or its own kernel modules, a VM is the correct abstraction and Sandlock will fight you.</p>
+            </div>
+
+            <div class="not-for-item">
+                <h3>Your kernel is older than 6.12</h3>
+                <p>Landlock ABI v6 lands in 6.12, and the strict default refuses to start without the protections it expects. Individual protections can be degraded or disabled per policy, but each one you waive is confinement you no longer have.</p>
+            </div>
+
+            <div class="not-for-item">
+                <h3>You need hard CPU or memory guarantees</h3>
+                <p>Limits are enforced by the supervisor rather than by cgroups: memory by tracking allocation syscalls, CPU by cycling SIGSTOP and SIGCONT. That is a budget, and a good one, but it is not the scheduler-level guarantee a cgroup gives you.</p>
+            </div>
+
+            <div class="not-for-item">
+                <h3>You are not on Linux</h3>
+                <p>Landlock and seccomp are Linux facilities. There is no macOS, BSD, or Windows port, and there will not be one, because the entire design rests on these two kernel interfaces.</p>
+            </div>
+
+            <div class="not-for-item">
+                <h3>You need dynamic, rotating secrets</h3>
+                <p>Credential injection loads the secret once at supervisor start. A leased or rotating value is picked up only on the next run. Sandlock composes with a secret manager rather than embedding one.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-band">
+    <div class="cta-band-inner">
+        <h2>Still Deciding?</h2>
+        <p>Read the security model to see exactly what each layer enforces and what it does not, or bring us the workload and we will tell you honestly whether Sandlock is the right boundary for it.</p>
+        <div class="button-group">
+            <a href="/security.html" class="btn btn-primary">
+                <i data-lucide="shield-check"></i>
+                Security Model
+            </a>
+            <a href="/enterprise.html" class="btn btn-secondary">
+                <i data-lucide="messages-square"></i>
+                Talk to an Engineer
+            </a>
+        </div>
+    </div>
+</section>

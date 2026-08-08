@@ -1,0 +1,130 @@
+---
+layout: doc
+title: "OCI Runtime and Kubernetes"
+description: "sandlock-oci implements the OCI Runtime Specification so containerd, CRI-O, and Kubernetes can use Sandlock as a namespace-less, cgroup-less low-level runtime."
+permalink: /docs/oci.html
+short_title: "OCI Runtime"
+heading: "OCI Runtime and Kubernetes"
+lede: "sandlock-oci is a thin OCI-compatible front end over sandlock-core. Where runc builds a container from namespaces, cgroups, and pivot_root, it produces a namespace-less container confined by Landlock and seccomp, running unprivileged."
+---
+
+<h2>How it fits in</h2>
+
+<p><code class="inline">sandlock-oci</code> parses an OCI bundle, translates <code class="inline">config.json</code> into a Sandlock policy, and drives the sandbox lifecycle on behalf of a higher-level runtime. Each call from that runtime maps to one subcommand. A long-lived supervisor daemon owns the sandbox between calls, and an in-sandbox <code class="inline">sandlock-init</code> acts as PID 1 so the workload and every <code class="inline">exec</code>'d process share one sandbox and one seccomp supervisor.</p>
+
+<div class="ascii-diagram">
+<pre>  containerd / CRI-O / kubelet
+            │  (OCI runtime calls)
+            ▼
+      <span class="hi">sandlock-oci</span>  ──fork──>  supervisor daemon
+            │                       │
+            │                       ▼
+            │                  sandlock-init  (confined PID 1 in the sandbox)
+            │                       │  fork + execve
+            │                       ▼
+            │                   workload  (+ any exec'd siblings)
+            ▼
+      <span class="hi">sandlock-core</span>
+   Landlock · seccomp · seccomp-notify · COW</pre>
+</div>
+
+<h2>Lifecycle</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Command</th><th scope="col">Effect</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>create &lt;id&gt; -b &lt;bundle&gt;</code></th><td>Spawn the supervisor, build the sandbox, park the child before execve, and save state</td></tr>
+            <tr><th scope="row"><code>start &lt;id&gt;</code></th><td>Release the parked child so it execve's the workload</td></tr>
+            <tr><th scope="row"><code>state &lt;id&gt;</code></th><td>Print <code>state.json</code>, reconciled against liveness</td></tr>
+            <tr><th scope="row"><code>kill &lt;id&gt; &lt;signal&gt;</code></th><td>Forward a signal to the workload, or to its group with <code>-a</code></td></tr>
+            <tr><th scope="row"><code>delete &lt;id&gt;</code></th><td>Shut the supervisor down and remove the state directory</td></tr>
+            <tr><th scope="row"><code>exec &lt;id&gt; &lt;cmd&gt;</code></th><td>Run a sibling process in the same sandbox</td></tr>
+            <tr><th scope="row"><code>list</code></th><td>List all sandboxes managed by sandlock-oci</td></tr>
+            <tr><th scope="row"><code>checkpoint &lt;id&gt;</code></th><td>Snapshot a running sandbox to an image directory</td></tr>
+            <tr><th scope="row"><code>restore &lt;id&gt;</code></th><td>Recreate and resume a sandbox from a checkpoint image</td></tr>
+            <tr><th scope="row"><code>check</code></th><td>Report the host kernel's Landlock support</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The <code class="inline">create</code> then <code class="inline">start</code> split matches the OCI two-phase model. <code class="inline">create</code> forks the child and installs the full policy, meaning Landlock, seccomp-notify, resource limits, and the network ACL, with the child parked just before execve; <code class="inline">start</code> releases it. The supervisor reports the child PID back to the caller over a pipe, so the handshake involves no sleep and no race.</p>
+
+<h2>Driving it directly</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock-oci</span> create mycontainer -b /path/to/bundle
+<span class="p">$</span> <span class="k">sandlock-oci</span> start  mycontainer
+<span class="p">$</span> <span class="k">sandlock-oci</span> state  mycontainer
+<span class="p">$</span> <span class="k">sandlock-oci</span> exec   mycontainer sh -c <span class="s">'echo hello'</span>
+<span class="p">$</span> <span class="k">sandlock-oci</span> kill   mycontainer SIGTERM
+<span class="p">$</span> <span class="k">sandlock-oci</span> delete mycontainer</code></pre>
+</div>
+
+<p>To use it under a higher-level runtime, point that runtime at the <code class="inline">sandlock-oci</code> binary as its OCI runtime.</p>
+
+<h2>Spec translation</h2>
+
+<p><code class="inline">config.json</code> is mapped to a Sandlock policy <strong>by intent rather than by replaying Linux container primitives</strong>. A memory limit becomes a memory limit; it does not become a cgroup.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">OCI field</th><th scope="col">Sandlock mapping</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>root.path</code></th><td>chroot target for the sandbox</td></tr>
+            <tr><th scope="row"><code>root.readonly</code></th><td>Grants the rootfs read-only instead of read-write</td></tr>
+            <tr><th scope="row"><code>mounts</code> (bind)</th><td><code>fs_mount</code>, read-only or read-write from the options</td></tr>
+            <tr><th scope="row"><code>mounts</code> (tmpfs)</th><td>Host-backed scratch directory, isolated and cleaned on delete</td></tr>
+            <tr><th scope="row"><code>mounts</code> (proc)</th><td>Host <code>/proc</code> mounted read-only, virtualized by seccomp</td></tr>
+            <tr><th scope="row"><code>mounts</code> (sysfs)</th><td>Host <code>/sys</code> mounted read-only</td></tr>
+            <tr><th scope="row"><code>process.cwd</code></th><td>Working directory</td></tr>
+            <tr><th scope="row"><code>process.env</code></th><td>Environment, started clean then populated from the spec</td></tr>
+            <tr><th scope="row"><code>process.user</code></th><td>Run-as uid and gid, with a user namespace only if needed</td></tr>
+            <tr><th scope="row"><code>linux.resources.memory.limit</code></th><td><code>max_memory</code></td></tr>
+            <tr><th scope="row"><code>linux.resources.pids.limit</code></th><td><code>max_processes</code></td></tr>
+            <tr><th scope="row"><code>linux.resources.cpu.quota</code> / <code>period</code></th><td>Sub-core <code>max_cpu</code> throttle</td></tr>
+            <tr><th scope="row"><code>linux.resources.cpu.cpus</code></th><td>CPU affinity via <code>sched_setaffinity</code></td></tr>
+            <tr><th scope="row"><code>linux.namespaces</code></th><td><strong>Ignored by design</strong></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>Supported spec versions are 1.0.x, 1.1.x, and 1.2.x. A bundle declaring any other version is <strong>rejected at create</strong> rather than silently mis-mapped, which is the difference between a clear failure and a container that quietly runs with less confinement than its author expected.</p>
+
+<p>Mount types with no safe namespace-less equivalent, namely <code class="inline">devpts</code>, <code class="inline">mqueue</code>, <code class="inline">cgroup</code>, and <code class="inline">cgroup2</code>, are skipped. Port binding is remapped so in-container servers can <code class="inline">bind()</code> without colliding on host ports.</p>
+
+<h2>runc compatibility</h2>
+
+<p>The CLI accepts the global and per-command flags containerd and CRI-O pass to <code class="inline">runc</code>, so it can be wired in as a drop-in replacement. Flags that do not apply to a namespace-less, cgroup-less runtime are accepted and ignored: <code class="inline">--systemd-cgroup</code>, <code class="inline">--rootless</code>, <code class="inline">--no-pivot</code>, <code class="inline">--no-new-keyring</code>, and <code class="inline">--debug</code>.</p>
+
+<p>Fatal errors are appended to the <code class="inline">--log</code> file in text or JSON form, so the containerd shim surfaces the real failure reason rather than a generic one.</p>
+
+<p>The supervisor daemon exits with the workload's status, re-raising the killing signal where applicable, so a reaping shim sees a wait-status that mirrors the workload exactly as it would from <code class="inline">runc</code>.</p>
+
+<h2>State</h2>
+
+<p>State lives under <code class="inline">$XDG_RUNTIME_DIR/sandlock-oci</code> for unprivileged users and <code class="inline">/run/sandlock-oci</code> for root, overridable with the global <code class="inline">--root</code> flag.</p>
+
+<h2>Requirements and limits</h2>
+
+<ul>
+    <li>Linux 6.12 or newer, for Landlock ABI v6. Run <code class="inline">sandlock-oci check</code> to confirm.</li>
+    <li>A built <code class="inline">sandlock-core</code>; this crate depends on it directly.</li>
+    <li>The workload and all <code class="inline">exec</code>'d processes <strong>share one sandbox and one seccomp supervisor</strong>, through the in-sandbox <code class="inline">sandlock-init</code> PID 1.</li>
+    <li><code class="inline">exec</code> is non-TTY only. <code class="inline">-t</code> and <code class="inline">--console-socket</code> are accepted for runc compatibility but ignored, as there is no PTY support yet.</li>
+</ul>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>What you gain and what you give up.</strong> You gain kernel-enforced confinement without namespaces, cgroups, or privilege. You give up the parts of the container model that <em>are</em> namespaces: a container-private PID space and network stack. If your workload depends on those specifically, rather than on the isolation they happen to provide, <code class="inline">runc</code> remains the right runtime for it.</p>
+    </div>
+</div>

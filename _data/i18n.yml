@@ -1,0 +1,35 @@
+# Translation strings for chrome shared across every page (header, footer).
+# Only `en` exists today; adding a `zh:` block with the same keys plus /zh
+# page twins is all the layout needs to serve a second language.
+en:
+  nav:
+    home: Home
+    product: Product
+    overview: How It Works
+    overview_sub: Landlock, seccomp, and the supervisor
+    use_cases: Use Cases
+    use_cases_sub: AI agents, CI, multi-tenant code execution
+    comparison: Comparison
+    comparison_sub: Sandlock vs containers, microVMs, gVisor
+    security: Security Model
+    security_sub: Threat model and enforcement boundaries
+    docs: Docs
+    docs_overview: Documentation Home
+    docs_overview_sub: Every guide and reference
+    getting_started: Getting Started
+    getting_started_sub: Install and run your first sandbox
+    cli: CLI Reference
+    cli_sub: sandlock run, ps, inspect, learn
+    reference: Sandbox Reference
+    reference_sub: Every policy field and default
+    sdks: SDKs
+    sdks_sub: Python, Rust, Go, and MCP
+    enterprise: Enterprise
+    demo: Schedule a Demo
+  footer:
+    tagline: A Multikernel Technologies project
+    product: Product
+    documentation: Documentation
+    company: Company
+    rights: All rights reserved.
+    license: Apache-2.0 licensed

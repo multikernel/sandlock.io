@@ -1,0 +1,210 @@
+---
+layout: doc
+title: "Architecture"
+description: "How Sandlock composes Landlock, seccomp-bpf, and seccomp user notification: the confinement sequence, the supervisor's handler chain, enforcement paths, and the crate layout."
+permalink: /docs/architecture.html
+short_title: "Architecture"
+heading: "Architecture"
+lede: "Sandlock is a policy applied to a process, not a runtime the process lives inside. This page covers what installs when, which component enforces which rule, and how to extend the supervisor."
+---
+
+<h2>Component layout</h2>
+
+<p>Sandlock is written in Rust. Everything, including the SDKs in other languages, drives the same core through the same policy object.</p>
+
+<div class="ascii-diagram">
+<pre>       ┌─────────────┐      ┌─────────────┐
+       │  Python SDK │      │   Go SDK    │
+       │   (ctypes)  │      │    (cgo)    │
+       └──────┬──────┘      └──────┬──────┘
+              │  FFI               │  FFI
+              └─────────┬──────────┘
+                        ▼
+┌──────────────┐    ┌──────────────────────────────┐
+│ sandlock CLI │───>│      <span class="hi">libsandlock_ffi.so</span>      │
+└──────────────┘    └───────────────┬──────────────┘
+                                    │
+┌──────────────┐                    │
+│ sandlock-oci │────────────┐       │
+│ (OCI runtime)│            │       │
+└──────────────┘            ▼       ▼
+                    ┌──────────────────────────────┐
+                    │        <span class="hi">sandlock-core</span>         │
+                    │  Landlock · seccomp · COW ·  │
+                    │  pipeline · policy_fn · vDSO │
+                    └──────────────────────────────┘</pre>
+</div>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Crate or package</th>
+                <th scope="col">Role</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>sandlock-core</code></th><td>The library: Landlock, seccomp, the supervisor, COW, pipelines, dynamic policy</td></tr>
+            <tr><th scope="row"><code>sandlock-cli</code></th><td>The <code>sandlock</code> binary</td></tr>
+            <tr><th scope="row"><code>sandlock-oci</code></th><td>Namespace-less OCI runtime shim for containerd, CRI-O, and Kubernetes</td></tr>
+            <tr><th scope="row"><code>sandlock-ffi</code></th><td>C ABI shared library, <code>libsandlock_ffi.so</code></td></tr>
+            <tr><th scope="row">Python SDK</th><td>ctypes bindings over the FFI library, plus the MCP server</td></tr>
+            <tr><th scope="row">Go SDK</th><td>cgo bindings over the FFI library</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>The confinement sequence</h2>
+
+<p>Confinement is installed in the child after <code class="inline">fork()</code> and before <code class="inline">exec()</code>. By the time the workload's first instruction runs, every restriction is already in place, and the parent only begins supervising once the child confirms the filter is installed.</p>
+
+<div class="ascii-diagram">
+<pre>Parent                              Child
+  │  fork()                           │
+  │──────────────────────────────────>│
+  │                                   ├─ 1. setpgid(0,0)
+  │                                   ├─ 2. Optional: chdir(cwd)
+  │                                   ├─ 3. <span class="hi">NO_NEW_PRIVS</span>
+  │                                   ├─ 4. <span class="hi">Landlock</span> (fs + net + IPC)
+  │                                   ├─ 5. <span class="hi">seccomp filter</span> (deny + notif)
+  │                                   │     └─ send notif fd ──> Parent
+  │  receive notif fd                 ├─ 6. Wait for "ready" signal
+  │  start supervisor (tokio)         ├─ 7. Close fds 3+
+  │  optional: vDSO patching          └─ 8. <span class="hi">exec(cmd)</span>
+  │  optional: policy_fn thread
+  │  optional: CPU throttle task</pre>
+</div>
+
+<p>Two steps deserve comment.</p>
+
+<p><strong>Step 3, <code class="inline">NO_NEW_PRIVS</code>, comes before the filter.</strong> Without it, a seccomp filter cannot be installed unprivileged at all, and a setuid binary reached later would gain privileges the policy never granted.</p>
+
+<p><strong>Step 7 closes every descriptor above stderr.</strong> A file descriptor inherited from the parent was opened before confinement existed, so the kernel will keep honouring it regardless of the Landlock ruleset. Closing them removes that escape hatch before the workload can use it.</p>
+
+<h2>What each layer enforces</h2>
+
+<h3>Landlock, in the kernel</h3>
+
+<p>Landlock is Linux's unprivileged access-control LSM. Sandlock compiles the policy's filesystem, network, and IPC rules into a ruleset and applies it to the child. From that moment the kernel evaluates every access itself, and the ruleset can never be widened for the lifetime of the process tree.</p>
+
+<ul>
+    <li><strong>Filesystem.</strong> Read and write grants become recursive <code class="inline">PATH_BENEATH</code> rules. Because the kernel resolves the path at access time, these rules are immune to the time-of-check/time-of-use races that defeat path-string filtering in userspace.</li>
+    <li><strong>TCP.</strong> Connect and bind port allowlists, from ABI v4 onwards.</li>
+    <li><strong>IPC.</strong> Abstract UNIX socket scoping and signal scoping, from ABI v6, which stop a sandbox reaching sibling processes on the host.</li>
+</ul>
+
+<p>Once installed, Landlock costs only the kernel's own check. This is what makes confinement cheap enough to leave enabled in production.</p>
+
+<h3>seccomp-bpf, in the kernel</h3>
+
+<p>A seccomp-bpf filter removes syscall families a confined workload has no legitimate use for. Sandlock's default blocklist is applied unconditionally and cannot be disabled; a policy may add denials on top, and may re-enable specific named groups such as System V IPC. Unknown group names are rejected rather than ignored, so a typo fails loudly instead of silently widening the sandbox.</p>
+
+<p>The same filter installs the notification listener used by the supervisor, and is inherited by every descendant.</p>
+
+<h3>seccomp user notification, in the supervisor</h3>
+
+<p>Rules like "connect only to this IP", "stop at 512 MB resident", or "stage this write instead of performing it" cannot be expressed as a static kernel rule; they need a decision at the moment the syscall happens. Seccomp user notification hands those syscalls to an async supervisor built on tokio, running in the parent process outside the sandbox.</p>
+
+<h2>Which syscalls reach the supervisor</h2>
+
+<p>Only these, and only when the relevant policy feature is active. Everything else runs at full speed under the kernel filter.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Syscall</th>
+                <th scope="col">Handler</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>clone</code> / <code>fork</code> / <code>vfork</code></th><td>Process count enforcement</td></tr>
+            <tr><th scope="row"><code>mmap</code> / <code>munmap</code> / <code>brk</code> / <code>mremap</code></th><td>Memory limit tracking</td></tr>
+            <tr><th scope="row"><code>connect</code> / <code>sendto</code> / <code>sendmsg</code></th><td>IP allowlist, on-behalf execution, HTTP ACL redirect</td></tr>
+            <tr><th scope="row"><code>bind</code></th><td>On-behalf bind and port remapping</td></tr>
+            <tr><th scope="row"><code>openat</code></th><td>/proc virtualization, COW interception</td></tr>
+            <tr><th scope="row"><code>unlinkat</code> / <code>mkdirat</code> / <code>renameat2</code></th><td>COW write interception</td></tr>
+            <tr><th scope="row"><code>execve</code> / <code>execveat</code></th><td>Policy callback hold, vDSO re-patching</td></tr>
+            <tr><th scope="row"><code>getrandom</code></th><td>Deterministic PRNG injection</td></tr>
+            <tr><th scope="row"><code>clock_nanosleep</code> / <code>timer_settime</code></th><td>Timer adjustment for frozen time</td></tr>
+            <tr><th scope="row"><code>getdents64</code></th><td>PID filtering, COW directory merging</td></tr>
+            <tr><th scope="row"><code>getsockname</code></th><td>Port remap translation</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>No-supervisor mode</h2>
+
+<p><code class="inline">--no-supervisor</code> runs a sandbox with layers one and two only: Landlock plus a kernel-only deny filter, with no supervisor process at all. What you lose is everything the supervisor provides, namely IP allowlisting, resource limits, COW, chroot mediation, <code class="inline">/proc</code> virtualization, and custom handlers.</p>
+
+<p>The mode exists because the kernel permits only one <code class="inline">SECCOMP_FILTER_FLAG_NEW_LISTENER</code> per task, so nesting one Sandlock inside another requires the inner one to go without.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Confining sandlock's own supervisor</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> --no-supervisor \
+    -r /proc -r /usr -r /lib -r /lib64 -r /bin -r /etc -w /tmp -- \
+    <span class="k">sandlock run</span> -r /usr -w /tmp -- untrusted-command</code></pre>
+</div>
+
+<h2>Network enforcement paths</h2>
+
+<p>Sandlock picks the cheapest path that can express your rules. This is not configurable; it falls out of the policy.</p>
+
+<h3>Direct path</h3>
+
+<p>Chosen when the policy consists of pure TCP port rules, with no concrete host, IP, or CIDR, and no HTTP ACL. Landlock enforces the port allowlist in the kernel and there is no per-syscall overhead. UDP and ICMP are never covered by Landlock and always use the other path when allowed at all.</p>
+
+<h3>On-behalf path</h3>
+
+<p>Chosen for any host, IP, or CIDR target, any UDP or ICMP rule, or any HTTP ACL rule, because the destination address has to be checked and Landlock cannot do that. Seccomp traps <code class="inline">connect()</code>, <code class="inline">sendto()</code>, <code class="inline">sendmsg()</code>, and <code class="inline">sendmmsg()</code>. The supervisor duplicates the child's descriptor, queries <code class="inline">getsockopt(SOL_SOCKET, SO_PROTOCOL)</code> to learn whether the socket is TCP, UDP, or ICMP, checks the destination against that protocol's resolved allowlist, and then performs the syscall itself. The HTTP proxy redirect, when configured, happens here too.</p>
+
+<p>Duplicating the descriptor rather than trusting an address the child supplied is what makes this TOCTOU-safe: the supervisor acts on the socket the kernel actually gave it.</p>
+
+<h2>Copy-on-write</h2>
+
+<p>When <code class="inline">workdir</code> is set, Sandlock intercepts filesystem syscalls through seccomp notification and stages writes in an upper directory; reads resolve upper first, then lower. There is no mount namespace, no user namespace, and no root involved. The branch is committed on normal exit and aborted on error, both configurable.</p>
+
+<p>See <a href="/docs/filesystem.html">Filesystem and COW</a> for branch actions, dry-run, and quota behaviour.</p>
+
+<h2>COW fork and map-reduce</h2>
+
+<p>Expensive initialization can be done once and then shared. An init callback runs in a template process; forking clones from it uses raw <code class="inline">fork(2)</code>, so every clone shares the template's memory copy-on-write. A thousand clones take about 530 ms, roughly 1,900 forks per second.</p>
+
+<p>Each clone's stdout is captured through its own pipe. The reduce step reads all of those pipes and feeds the combined output to a reducer's stdin, so the whole data flow is pipe-based with no temporary files. The mapper and the reducer are separate sandboxes with independent policies, which is what lets the mapper hold data access that the reducer does not. <code class="inline">CLONE_ID=0..N-1</code> is set in each clone automatically.</p>
+
+<h2>Custom handlers</h2>
+
+<p>Downstream Rust crates can append their own seccomp-notification handlers to the supervisor's chain, registering for any syscall they care about through the <code class="inline">Handler</code> trait and <code class="inline">Sandbox::run_with_handlers</code>.</p>
+
+<p>Two rules keep this from becoming an escape hatch:</p>
+
+<ul>
+    <li><strong>The built-in chain runs first.</strong> A user handler observes and can add restrictions, but cannot subvert a decision the built-ins already made.</li>
+    <li><strong>Registration is validated.</strong> Handlers on syscalls in the default blocklist, or in the policy's extra denials, are rejected at registration time rather than silently never firing.</li>
+</ul>
+
+<p>See <a href="/docs/rust.html#custom-handlers">the Rust API guide</a> for the handler API, ordering semantics, and state patterns.</p>
+
+<h2>Host requirements</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Feature</th>
+                <th scope="col">Minimum kernel</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row">seccomp user notification</th><td>5.6</td></tr>
+            <tr><th scope="row">Landlock filesystem rules</th><td>5.13</td></tr>
+            <tr><th scope="row">Landlock TCP port rules (ABI v4)</th><td>6.7</td></tr>
+            <tr><th scope="row">Landlock IPC scoping (ABI v6)</th><td>6.12</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>Sandlock's default is strict: it enforces every protection the host supports and refuses to start when one it expects is unavailable. Waiving a protection is an explicit, per-protection decision, and the resolved posture is part of a sandbox's checkpoint. See <a href="/docs/reference.html#protection-opt-out">protection opt-out</a>.</p>

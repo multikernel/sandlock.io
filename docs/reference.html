@@ -1,0 +1,521 @@
+---
+layout: doc
+title: "Sandbox Reference"
+description: "Every Sandlock policy field with its type, default, and behaviour, grouped by section and cross-referenced between the Python SDK, the TOML profile schema, and the CLI."
+permalink: /docs/reference.html
+short_title: "Sandbox Reference"
+heading: "Sandbox Reference"
+lede: "One sectioned schema shared by the CLI, the SDKs, and TOML profiles. Unless noted, every field is optional, and omitting one means no restriction beyond Sandlock's default seccomp blocklist, which is always applied."
+---
+
+<p>Sections are named for the concern they cover: <code class="inline">config</code>, <code class="inline">determinism</code>, <code class="inline">program</code>, <code class="inline">filesystem</code>, <code class="inline">network</code>, <code class="inline">http</code>, <code class="inline">syscalls</code>, and <code class="inline">limits</code>. The Python <code class="inline">Sandbox</code> dataclass exposes the same fields as keyword arguments.</p>
+
+<p>Where a Python name differs from its TOML key, both are listed. The differences are concentrated in <code class="inline">[filesystem]</code> and <code class="inline">[limits]</code>, which drop the <code class="inline">fs_</code> and <code class="inline">max_</code> prefixes the dataclass carries, because inside a named section the prefix is redundant.</p>
+
+<h2>Synopsis</h2>
+
+<h3>Python</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox, BranchAction
+
+sandbox = Sandbox(
+    <span class="c"># [config]</span>
+    http_ca=<span class="k">None</span>, http_key=<span class="k">None</span>,
+    fs_storage=<span class="k">None</span>, workdir=<span class="k">None</span>,
+
+    <span class="c"># [determinism]</span>
+    random_seed=<span class="k">None</span>, time_start=<span class="k">None</span>,
+    deterministic_dirs=<span class="k">False</span>, no_randomize_memory=<span class="k">False</span>,
+
+    <span class="c"># [program]  (process knobs only; exec/args are arguments to .run/.cmd)</span>
+    env={}, cwd=<span class="k">None</span>, uid=<span class="k">None</span>, gid=<span class="k">None</span>,
+    clean_env=<span class="k">False</span>, no_coredump=<span class="k">False</span>, no_huge_pages=<span class="k">False</span>,
+    no_supervisor=<span class="k">False</span>,
+
+    <span class="c"># [filesystem]</span>
+    fs_readable=(), fs_writable=(), fs_denied=(),
+    chroot=<span class="k">None</span>, fs_mount={},
+    on_exit=BranchAction.COMMIT, on_error=BranchAction.ABORT,
+
+    <span class="c"># [network]</span>
+    net_allow_bind=(), net_allow=(), port_remap=<span class="k">False</span>,
+
+    <span class="c"># [http]</span>
+    http_ports=(), http_allow=(), http_deny=(),
+
+    <span class="c"># [syscalls]</span>
+    extra_allow_syscalls=(), extra_deny_syscalls=(),
+
+    <span class="c"># [limits]</span>
+    max_memory=<span class="k">None</span>, max_processes=64, max_open_files=<span class="k">None</span>,
+    max_cpu=<span class="k">None</span>, max_disk=<span class="k">None</span>,
+    gpu_devices=<span class="k">None</span>, cpu_cores=<span class="k">None</span>, num_cpus=<span class="k">None</span>,
+
+    <span class="c"># Runtime kwargs (not serialized as policy)</span>
+    name=<span class="k">None</span>, policy_fn=<span class="k">None</span>, init_fn=<span class="k">None</span>, work_fn=<span class="k">None</span>,
+
+    <span class="c"># Advanced (internal; usually configured via the fields above)</span>
+    notif_policy=<span class="k">None</span>,
+)</code></pre>
+</div>
+
+<h3>TOML profile</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">toml</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>[config]
+http_ca         = <span class="s">"/path/to/ca.pem"</span>
+http_key        = <span class="s">"/path/to/ca.key"</span>
+http_inject_ca  = [<span class="s">"/etc/ssl/certs/ca-certificates.crt"</span>]
+http_ca_out     = <span class="s">"/tmp/sandlock-ca.pem"</span>
+fs_storage      = <span class="s">"/var/lib/sandlock"</span>
+workdir         = <span class="s">"/opt/project"</span>
+
+[determinism]
+random_seed         = 42
+time_start          = <span class="s">"2026-01-01T00:00:00Z"</span>
+deterministic_dirs  = <span class="k">true</span>
+no_randomize_memory = <span class="k">true</span>
+
+[program]
+exec          = <span class="s">"/usr/bin/make"</span>
+args          = [<span class="s">"-j4"</span>]
+env           = { CC = <span class="s">"gcc"</span> }
+cwd           = <span class="s">"/work"</span>
+uid           = 0
+gid           = 0
+clean_env     = <span class="k">true</span>
+no_coredump   = <span class="k">true</span>
+no_huge_pages = <span class="k">true</span>
+no_supervisor = <span class="k">false</span>
+
+[filesystem]
+read      = [<span class="s">"/usr"</span>, <span class="s">"/lib"</span>]
+write     = [<span class="s">"/tmp"</span>]
+deny      = [<span class="s">"/proc/kcore"</span>]
+chroot    = <span class="s">"/opt/rootfs"</span>
+mount     = [<span class="s">"/work:/host/sandbox/work"</span>]
+on_exit   = <span class="s">"commit"</span>                  <span class="c"># "commit" | "abort" | "keep"</span>
+on_error  = <span class="s">"abort"</span>
+
+[network]
+allow_bind = [8080]
+allow      = [<span class="s">"api.example.com:443"</span>, <span class="s">"udp://1.1.1.1:53"</span>]
+port_remap = <span class="k">false</span>
+
+[http]
+ports = [80]
+allow = [<span class="s">"POST api.openai.com/v1/*"</span>]
+deny  = [<span class="s">"* */admin/*"</span>]
+
+[syscalls]
+extra_allow = [<span class="s">"sysv_ipc"</span>]
+extra_deny  = []
+
+[limits]
+memory      = <span class="s">"512M"</span>
+processes   = 64
+open_files  = 256
+cpu         = 50
+disk        = <span class="s">"1G"</span>
+gpu_devices = [0]
+cpu_cores   = [0, 1]
+num_cpus    = 2</code></pre>
+</div>
+
+<h2>config</h2>
+
+<p>Top-level configuration for the supervisor and the COW workspace.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>http_ca</code></th><td><code>http_ca</code></td><td><code>str | None</code></td><td><code>None</code></td><td>PEM CA certificate path for HTTPS interception. When set, port 443 is added to <code>http_ports</code>.</td></tr>
+            <tr><th scope="row"><code>http_key</code></th><td><code>http_key</code></td><td><code>str | None</code></td><td><code>None</code></td><td>PEM CA private key path. Required whenever <code>http_ca</code> is set.</td></tr>
+            <tr><th scope="row"><code>http_inject_ca</code></th><td><code>http_inject_ca</code></td><td><code>list[str]</code></td><td><code>[]</code></td><td>Trust bundle paths to splice the active CA's public cert into at open time. Without <code>http_ca</code>, generates an ephemeral CA (private key in memory only, never on disk) and intercepts port 443. Requires at least one HTTP rule.</td></tr>
+            <tr><th scope="row"><code>http_ca_out</code></th><td><code>http_ca_out</code></td><td><code>str | None</code></td><td><code>None</code></td><td>Writes the active CA's public certificate (PEM) here; never the private key. Requires at least one HTTP rule.</td></tr>
+            <tr><th scope="row"><code>fs_storage</code></th><td><code>fs_storage</code></td><td><code>str | None</code></td><td><code>None</code></td><td>Separate storage directory for the seccomp COW upper layer and deltas.</td></tr>
+            <tr><th scope="row"><code>workdir</code></th><td><code>workdir</code></td><td><code>str | None</code></td><td><code>None</code></td><td>COW root directory. Controls which directory COW tracks; does <strong>not</strong> set the child's working directory.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>HTTPS interception is opt-in. Without <code class="inline">http_ca</code> or <code class="inline">http_inject_ca</code>, port 443 is not intercepted and <code class="inline">net_allow host:443</code> permits raw TLS with no content inspection. When <code class="inline">http_ca</code> is set, the CA must be one the caller generated and installed into the sandbox's trust store, typically under <code class="inline">/etc/ssl/certs/</code>.</p>
+
+<p>File injection covers tools that read a trust file from disk: curl, git, the OpenSSL CLI, Go, Python's stdlib <code class="inline">ssl</code>, and Python <code class="inline">requests</code> and <code class="inline">httpx</code> through certifi's <code class="inline">cacert.pem</code> if you name that path. Runtimes with a compiled-in CA list, such as Node and Java, are not reachable by file injection; use <code class="inline">http_ca_out</code> and point the runtime's own environment variable at the exported certificate.</p>
+
+<h3>Credential injection</h3>
+
+<p><code class="inline">--credential NAME=SOURCE</code> loads a secret into the supervisor, where <code class="inline">SOURCE</code> is <code class="inline">env:VAR</code> (the variable is also stripped from the child's environment), <code class="inline">file:PATH</code>, or <code class="inline">fd:N</code>. <code class="inline">--http-auth "METHOD HOST/PATH AUTHSPEC NAME [replace|add-only]"</code> then attaches that credential to a matching request <strong>in the proxy, strictly after the ACL check</strong>, so the child process never carries the value.</p>
+
+<p><code class="inline">AUTHSPEC</code> is one of <code class="inline">bearer</code>, <code class="inline">basic:&lt;user&gt;</code>, <code class="inline">header:&lt;name&gt;</code>, <code class="inline">apikey:&lt;name&gt;</code>, or <code class="inline">query:&lt;param&gt;</code>. The default <code class="inline">replace</code> overwrites an existing credential of that shape; <code class="inline">add-only</code> leaves a caller-supplied one in place.</p>
+
+<p>Injection requires an HTTP ACL proxy, and injecting into an HTTPS host additionally requires <code class="inline">http_ca</code> or <code class="inline">http_inject_ca</code>. Over cleartext HTTP the secret reaches the upstream in plaintext, so Sandlock emits a one-per-run warning. <code class="inline">--credential</code> and <code class="inline">--http-auth</code> are CLI and builder flags, not <code class="inline">[config]</code> profile keys. Full examples are on the <a href="/docs/http-acl.html">HTTP ACL page</a>.</p>
+
+<h2>determinism</h2>
+
+<p>Knobs that pin sources of non-determinism in the child process.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>random_seed</code></th><td><code>int | None</code></td><td><code>None</code></td><td>Seed for deterministic <code>getrandom()</code>. Identical seeds yield identical byte streams.</td></tr>
+            <tr><th scope="row"><code>time_start</code></th><td><code>float | str | None</code></td><td><code>None</code></td><td>Frozen start time as a Unix timestamp or an RFC 3339 / ISO 8601 string. Time then advances at real speed from that epoch.</td></tr>
+            <tr><th scope="row"><code>deterministic_dirs</code></th><td><code>bool</code></td><td><code>False</code></td><td>Sort <code>readdir()</code> entries lexicographically, so <code>ls</code>, <code>glob</code>, and <code>os.listdir</code> return a stable order.</td></tr>
+            <tr><th scope="row"><code>no_randomize_memory</code></th><td><code>bool</code></td><td><code>False</code></td><td>Disable ASLR via <code>personality(ADDR_NO_RANDOMIZE)</code>.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>program</h2>
+
+<p>Process-level knobs applied to the child. In a TOML profile, <code class="inline">exec</code> and <code class="inline">args</code> also live here; in the Python SDK those are arguments to <code class="inline">run()</code> or <code class="inline">cmd()</code> and are not fields on <code class="inline">Sandbox</code>.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>env</code></th><td><code>Mapping[str, str]</code></td><td><code>{}</code></td><td>Variables to set or override in the child. Applied after <code>clean_env</code>.</td></tr>
+            <tr><th scope="row"><code>cwd</code></th><td><code>str | None</code></td><td><code>None</code></td><td>Child working directory. Independent of <code>workdir</code>.</td></tr>
+            <tr><th scope="row"><code>uid</code></th><td><code>int | None</code></td><td><code>None</code></td><td>UID to map the child to inside a user namespace, for example <code>0</code> for fake root. Must be set together with <code>gid</code>. The child retains no host privileges regardless of the mapped UID. Requires user namespaces to be available.</td></tr>
+            <tr><th scope="row"><code>gid</code></th><td><code>int | None</code></td><td><code>None</code></td><td>GID to map inside the user namespace. Must be set together with <code>uid</code>. An unprivileged user namespace maps a single id, so supplementary groups are unavailable.</td></tr>
+            <tr><th scope="row"><code>clean_env</code></th><td><code>bool</code></td><td><code>False</code></td><td>Start from a minimal environment (<code>PATH</code>, <code>HOME</code>, <code>USER</code>, <code>TERM</code>, <code>LANG</code>) instead of inheriting the parent's.</td></tr>
+            <tr><th scope="row"><code>no_coredump</code></th><td><code>bool</code></td><td><code>False</code></td><td><code>prctl(PR_SET_DUMPABLE, 0)</code>. Disables core dumps and restricts other processes' access to <code>/proc/&lt;pid&gt;</code>. Breaks gdb, strace, and perf.</td></tr>
+            <tr><th scope="row"><code>no_huge_pages</code></th><td><code>bool</code></td><td><code>False</code></td><td>Disable transparent huge pages via <code>prctl(PR_SET_THP_DISABLE)</code>.</td></tr>
+            <tr><th scope="row"><code>no_supervisor</code></th><td><code>bool</code></td><td><code>False</code></td><td>Skip the seccomp user-notification supervisor. The sandbox runs with Landlock plus a kernel-only deny filter, without IP allowlisting, resource limits, COW, chroot mediation, <code>/proc</code> virtualization, or custom handlers. Required when nesting inside another sandlock, since the kernel allows one <code>SECCOMP_FILTER_FLAG_NEW_LISTENER</code> per task.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>filesystem</h2>
+
+<p>Landlock filesystem rules plus chroot, mount mapping, and COW isolation.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>fs_readable</code></th><td><code>read</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Paths the sandbox may read, in addition to <code>fs_writable</code>.</td></tr>
+            <tr><th scope="row"><code>fs_writable</code></th><td><code>write</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Paths the sandbox may read and write.</td></tr>
+            <tr><th scope="row"><code>fs_denied</code></th><td><code>deny</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Paths explicitly denied, even where implied by a broader rule.</td></tr>
+            <tr><th scope="row"><code>chroot</code></th><td><code>chroot</code></td><td><code>str | None</code></td><td><code>None</code></td><td>Path to chroot into before applying the rest of the confinement.</td></tr>
+            <tr><th scope="row"><code>fs_mount</code></th><td><code>mount</code></td><td><code>Mapping[str, str]</code></td><td><code>{}</code></td><td>Map virtual paths inside the chroot to host directories. Python form <code>{"/work": "/host/sandbox/work"}</code>; TOML form a list of <code>"VIRTUAL:HOST"</code> strings. See the read-only note below.</td></tr>
+            <tr><th scope="row"><code>on_exit</code></th><td><code>on_exit</code></td><td><code>BranchAction</code></td><td><code>COMMIT</code></td><td>Branch action on normal sandbox exit.</td></tr>
+            <tr><th scope="row"><code>on_error</code></th><td><code>on_error</code></td><td><code>BranchAction</code></td><td><code>ABORT</code></td><td>Branch action on sandbox error or exception.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Read-only mounts.</strong> A trailing <code class="inline">:ro</code> (or the default <code class="inline">:rw</code>) selects a read-only mount. The CLI honours it in <code class="inline">--fs-mount</code> and in profiles, and <code class="inline">sandlock inspect --toml</code> writes it back out. The Python SDK rejects such entries with <code class="inline">PolicyError</code>, since its mapping type cannot express the flag; load the profile with <code class="inline">sandlock run --profile-file &lt;path&gt;</code>, or use the C ABI's <code class="inline">sandlock_sandbox_builder_fs_mount_ro</code>.</p>
+    </div>
+</div>
+
+<p>Landlock rules are kernel-evaluated and TOCTOU-immune.</p>
+
+<h2>network</h2>
+
+<p>Outbound allowlist, bind allowlist, and port virtualization. Each <code class="inline">net_allow</code> entry is a rule naming protocol, host, and port. Rules are OR'd, and an empty <code class="inline">net_allow</code> denies all outbound traffic.</p>
+
+<p>Protocol gating falls out of rule presence: without a UDP rule, UDP socket creation is denied at the seccomp layer; without an ICMP rule, kernel ping socket creation is denied. A scheme-less rule counts for both TCP and UDP; ICMP always needs <code class="inline">icmp://</code>. Raw ICMP (<code class="inline">SOCK_RAW</code> + <code class="inline">IPPROTO_ICMP</code>) is never exposed.</p>
+
+<h3>Rule shapes</h3>
+
+<ul>
+    <li><code class="inline">host:port[,port,...]</code> &mdash; no scheme prefix, covers TCP and UDP.</li>
+    <li><code class="inline">tcp://host:port</code> &mdash; TCP only.</li>
+    <li><code class="inline">udp://host:port</code> &mdash; UDP only. <code class="inline">udp://*:*</code> opens any UDP destination.</li>
+    <li><code class="inline">icmp://host</code> &mdash; kernel ping socket (<code class="inline">SOCK_DGRAM</code> + <code class="inline">IPPROTO_ICMP</code>). <code class="inline">icmp://*</code> opens any echo destination.</li>
+</ul>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>net_allow</code></th><td><code>allow</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Outbound endpoint allowlist. Empty denies all outbound.</td></tr>
+            <tr><th scope="row"><code>net_allow_bind</code></th><td><code>allow_bind</code></td><td><code>Sequence[int | str]</code></td><td><code>()</code></td><td>TCP ports the sandbox may bind or listen on; a default-deny allowlist. Each entry is a port or a <code>"lo-hi"</code> range; <code>"*"</code> allows any port and cannot be mixed with port entries. Landlock ABI v4+, TCP only (UDP <code>bind()</code> is not separately gated). Mutually exclusive with <code>net_deny_bind</code>.</td></tr>
+            <tr><th scope="row"><code>net_deny_bind</code></th><td><code>deny_bind</code></td><td><code>Sequence[int | str]</code></td><td><code>()</code></td><td>TCP ports the sandbox may not bind; a default-allow denylist. Same port syntax, enforced on the on-behalf <code>bind()</code> path with Landlock's <code>BIND_TCP</code> relaxed. Mutually exclusive with <code>net_allow_bind</code>.</td></tr>
+            <tr><th scope="row"><code>port_remap</code></th><td><code>port_remap</code></td><td><code>bool</code></td><td><code>False</code></td><td>Transparent TCP port virtualization. Each sandbox gets an independent virtual port space; conflicting binds are remapped to unique real ports via <code>pidfd_getfd</code>.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>Hostnames are resolved once at sandbox creation and pinned via a synthetic <code class="inline">/etc/hosts</code>, which is injected only when at least one rule references a concrete host. Rules made purely of <code class="inline">:port</code>, <code class="inline">udp://*:*</code>, or <code class="inline">icmp://*</code> leave the host's real DNS configuration visible. The complete grammar is on the <a href="/docs/network.html">network model page</a>.</p>
+
+<h2>http</h2>
+
+<p>HTTP-level access control through a transparent MITM proxy.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>http_allow</code></th><td><code>allow</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Allow rules of the form <code>"METHOD host/path"</code> with glob path matching.</td></tr>
+            <tr><th scope="row"><code>http_deny</code></th><td><code>deny</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Deny rules, checked before allow rules. Same format.</td></tr>
+            <tr><th scope="row"><code>http_ports</code></th><td><code>ports</code></td><td><code>Sequence[int]</code></td><td><code>()</code></td><td>TCP ports to intercept. Defaults to <code>[80]</code>; <code>443</code> is added when <code>http_ca</code> is set.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>When either list is non-empty, the supervisor spawns the proxy and redirects matching ports to it. HTTP rules with concrete hosts auto-extend <code class="inline">net_allow</code> with the corresponding TCP entry on each <code class="inline">http_ports</code> value, and on 443 when <code class="inline">http_ca</code> is set. Wildcard hosts auto-add <code class="inline">:80</code> and, with a CA, <code class="inline">:443</code>. All auto-added entries are TCP.</p>
+
+<h2>syscalls</h2>
+
+<p>Adjustments to Sandlock's default seccomp-bpf blocklist. The blocklist is applied unconditionally; these fields alter it.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>extra_allow_syscalls</code></th><td><code>extra_allow</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Syscall group names to re-allow. Groups: <code>"sysv_ipc"</code>. Unknown groups and individual syscall names are rejected.</td></tr>
+            <tr><th scope="row"><code>extra_deny_syscalls</code></th><td><code>extra_deny</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Additional syscall or group names to block on top of the default blocklist. Groups expand to their member syscalls.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>limits</h2>
+
+<p>Resource caps and visibility limits. The TOML schema drops the <code class="inline">max_</code> prefix the Python names carry; the GPU and CPU placement fields keep their names.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>max_memory</code></th><td><code>memory</code></td><td><code>str | int | None</code></td><td><code>None</code></td><td>Memory limit. Accepts <code>"512M"</code>, <code>"1G"</code>, or an integer byte count.</td></tr>
+            <tr><th scope="row"><code>max_processes</code></th><td><code>processes</code></td><td><code>int</code></td><td><code>64</code></td><td>Maximum <strong>concurrent</strong> processes (peak, not lifetime; threads do not count). Also enables the fork interception used by checkpoint freeze.</td></tr>
+            <tr><th scope="row"><code>max_open_files</code></th><td><code>open_files</code></td><td><code>int | None</code></td><td><code>None</code></td><td>Maximum open descriptors, enforced via <code>RLIMIT_NOFILE</code>. See the notes below.</td></tr>
+            <tr><th scope="row"><code>max_cpu</code></th><td><code>cpu</code></td><td><code>int | None</code></td><td><code>None</code></td><td>CPU throttle as a percentage of one core, 1 to 100. Applied to the whole process group by cycling <code>SIGSTOP</code> and <code>SIGCONT</code>.</td></tr>
+            <tr><th scope="row"><code>max_disk</code></th><td><code>disk</code></td><td><code>str | None</code></td><td><code>None</code></td><td>COW storage quota, for example <code>"1G"</code>. Returned as <code>ENOSPC</code> when the upper layer exceeds it.</td></tr>
+            <tr><th scope="row"><code>gpu_devices</code></th><td><code>gpu_devices</code></td><td><code>Sequence[int] | None</code></td><td><code>None</code></td><td>GPU device indices to expose. <code>None</code> denies GPU access entirely; <code>[]</code> exposes every GPU; a list exposes only those devices. Adds Landlock rules for <code>/dev/nvidia*</code> and <code>/dev/dri/*</code> and sets <code>CUDA_VISIBLE_DEVICES</code> and <code>ROCR_VISIBLE_DEVICES</code>.</td></tr>
+            <tr><th scope="row"><code>cpu_cores</code></th><td><code>cpu_cores</code></td><td><code>Sequence[int] | None</code></td><td><code>None</code></td><td>CPU cores to pin the sandbox to via <code>sched_setaffinity</code> in the child.</td></tr>
+            <tr><th scope="row"><code>num_cpus</code></th><td><code>num_cpus</code></td><td><code>int | None</code></td><td><code>None</code></td><td>Visible CPU count in <code>/proc/cpuinfo</code>, renumbered <code>0..N-1</code>. Also virtualizes <code>/proc/meminfo</code> when <code>max_memory</code> is set.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Notes on max_open_files</h3>
+
+<p>This one has enough sharp edges to be worth spelling out.</p>
+
+<p><strong>It is a budget, not confinement.</strong> Both the soft and hard limits are lowered, and descendants inherit the cap. But the value is clamped to both limits Sandlock itself inherited, so it is an upper bound and never a grant: a request above the inherited soft limit gives the guest the inherited limit, not more. Raise the limit on Sandlock itself with <code class="inline">prlimit</code> or systemd's <code class="inline">LimitNOFILE=</code> if a guest genuinely needs a bigger budget. And lowering the hard limit is one-way only for an <em>unprivileged</em> Sandlock: a sandbox launched by root, or with <code class="inline">CAP_SYS_RESOURCE</code>, can raise it back, because Sandlock does not drop capabilities.</p>
+
+<p><strong>It must cover process startup.</strong> The limit has to accommodate stdio, the dynamic loader's per-library descriptors, and under chroot the injected exec descriptor. Too low a value fails the exec and exits 127, reporting <code class="inline">EMFILE</code> on a plain exec but <code class="inline">EIO</code> under chroot. Past startup the errno depends on who services the open: <code class="inline">EMFILE</code> from the kernel, <code class="inline">EACCES</code> when the supervisor mediates it (chroot, COW, procfs virtualization). The measured floor for a trivial command is about 4, plain exec or chroot; programs linking more libraries need more.</p>
+
+<h2>Runtime kwargs (Python only)</h2>
+
+<p>These are not part of the policy serialization and have no TOML counterpart.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>name</code></th><td><code>str | None</code></td><td><code>None</code></td><td>Sandbox name and virtual hostname inside the sandbox. Auto-generated as <code>sandbox-{pid}</code> when omitted. Maximum 64 bytes; must not contain NUL.</td></tr>
+            <tr><th scope="row"><code>policy_fn</code></th><td><code>Callable | None</code></td><td><code>None</code></td><td>Per-event dynamic policy callback. See <a href="/docs/policy.html">Dynamic Policy</a>.</td></tr>
+            <tr><th scope="row"><code>init_fn</code></th><td><code>Callable | None</code></td><td><code>None</code></td><td>Callback invoked once in the template process before the COW fork.</td></tr>
+            <tr><th scope="row"><code>work_fn</code></th><td><code>Callable | None</code></td><td><code>None</code></td><td>Callback invoked in each COW clone; receives <code>clone_id</code>.</td></tr>
+            <tr><th scope="row"><code>control_socket</code></th><td><code>bool</code></td><td><code>True</code></td><td>Enable the per-sandbox control socket for introspection (<code>sandlock ps</code>, <code>sandlock inspect</code>). When <code>False</code>, no runtime directory, pid file, or control-socket task is created and the sandbox is invisible to both. <code>no_supervisor</code> sandboxes create one only when this is <code>True</code>.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Advanced</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Default</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>notif_policy</code></th><td><code>NotifPolicy | None</code></td><td><code>None</code></td><td>Seccomp user-notification policy for <code>/proc</code> and <code>/sys</code> virtualization. Usually configured implicitly by the other fields; advanced use only.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Protection opt-out</h2>
+
+<p>By default Sandlock enforces every Landlock protection the host kernel supports and <strong>refuses to start when a required protection is unavailable</strong>. Two builder methods on <code class="inline">SandboxBuilder</code> relax the strict default per protection:</p>
+
+<ul>
+    <li><code class="inline">allow_degraded(Protection::P)</code> &mdash; enforce <code class="inline">P</code> where the host kernel supports it, silently skip it where it does not. Use this when deploying across a mixed fleet of kernels.</li>
+    <li><code class="inline">disable(Protection::P)</code> &mdash; never enforce <code class="inline">P</code>, even on a kernel that supports it. Use this when the workload legitimately needs the capability the protection blocks, for example signalling a sibling process that <code class="inline">SignalScope</code> would otherwise prevent.</li>
+</ul>
+
+<p>Calling neither leaves the protection in its default <code class="inline">Strict</code> state. The methods are last-wins per protection.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Protection</th>
+                <th scope="col">CLI name</th>
+                <th scope="col">Landlock ABI floor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>FsRefer</code></th><td><code>fs-refer</code></td><td>v2</td></tr>
+            <tr><th scope="row"><code>FsTruncate</code></th><td><code>fs-truncate</code></td><td>v3</td></tr>
+            <tr><th scope="row"><code>NetTcp</code></th><td><code>net-tcp</code></td><td>v4</td></tr>
+            <tr><th scope="row"><code>FsIoctlDev</code></th><td><code>fs-ioctl-dev</code></td><td>v5</td></tr>
+            <tr><th scope="row"><code>SignalScope</code></th><td><code>signal-scope</code></td><td>v6</td></tr>
+            <tr><th scope="row"><code>AbstractUnixSocketScope</code></th><td><code>abstract-unix-socket-scope</code></td><td>v6</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> sandlock_core::{Protection, Sandbox};
+
+<span class="k">let</span> sb = Sandbox::builder()
+    .fs_read(<span class="s">"/data"</span>)
+    .fs_write(<span class="s">"/tmp"</span>)
+    .allow_degraded(Protection::SignalScope)
+    .allow_degraded(Protection::AbstractUnixSocketScope)
+    .build()?;</code></pre>
+</div>
+
+<p>The two calls let this sandbox build on kernels below 6.12, where the v6 IPC scopes are unavailable; on a kernel that supports them, the scopes remain enforced.</p>
+
+<p><code class="inline">sandlock check</code> reports each protection's availability against the host's Landlock ABI, and <code class="inline">Sandbox::active_protections()</code> returns the resolved status of a constructed sandbox: <code class="inline">Active</code>, <code class="inline">Degraded</code>, <code class="inline">Disabled</code>, or <code class="inline">Unavailable</code>. The protection policy is part of the checkpoint, so a saved sandbox restores with the exact posture it was built with.</p>
+
+<p>From the CLI the equivalents are <code class="inline">--allow-degraded &lt;PROTECTION&gt;</code> and <code class="inline">--disable &lt;PROTECTION&gt;</code>, both repeatable. <code class="inline">--disable fs-refer</code> is rejected: the kernel denies REFER by default when the rule is unhandled, so disabling it would only tighten the sandbox and the flag would be misleading.</p>
+
+<h2>Enumerations and result types</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">class</span> BranchAction(Enum):
+    COMMIT = <span class="s">"commit"</span>   <span class="c"># Merge branch writes into the parent branch.</span>
+    ABORT  = <span class="s">"abort"</span>    <span class="c"># Discard all branch writes.</span>
+    KEEP   = <span class="s">"keep"</span>     <span class="c"># Leave the branch as-is; caller decides.</span>
+
+
+@dataclass(frozen=<span class="k">True</span>)
+<span class="k">class</span> Change:
+    kind: <span class="k">str</span>   <span class="c"># "A" = added, "M" = modified, "D" = deleted.</span>
+    path: <span class="k">str</span>   <span class="c"># Path relative to workdir.</span>
+
+
+@dataclass
+<span class="k">class</span> DryRunResult:
+    success:   <span class="k">bool</span>
+    exit_code: <span class="k">int</span>
+    stdout:    <span class="k">bytes</span>
+    stderr:    <span class="k">bytes</span>
+    changes:   <span class="k">list</span>[Change]
+    error:     <span class="k">str</span> | <span class="k">None</span></code></pre>
+</div>
+
+<h2>Helpers</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> parse_ports
+
+parse_ports([80, <span class="s">"443"</span>, <span class="s">"8000-8005"</span>])
+<span class="c"># => [80, 443, 8000, 8001, 8002, 8003, 8004, 8005]</span></code></pre>
+</div>
+
+<h2>Behavioural notes</h2>
+
+<ol>
+    <li><strong>Default-deny network.</strong> <code class="inline">net_allow=()</code>, the default, denies all outbound traffic. Protocol gating is a function of rule presence: the seccomp layer denies UDP and ICMP socket creation when no rule of that protocol is configured.</li>
+    <li><strong>Seccomp COW with <code class="inline">workdir</code>.</strong> When <code class="inline">workdir</code> is set, the COW path intercepts writes underneath it and stages them in an upper layer, committed or aborted on exit according to <code class="inline">on_exit</code> and <code class="inline">on_error</code>.</li>
+    <li><strong>HTTP host auto-expansion.</strong> HTTP rules referencing concrete hosts auto-add corresponding TCP entries on <code class="inline">http_ports</code>, and on 443 when <code class="inline">http_ca</code> is set. Wildcard hosts add the equivalent any-IP entries. All auto-added entries are TCP.</li>
+    <li><strong>TOCTOU and <code class="inline">policy_fn</code>.</strong> Path strings are never exposed on policy events, because seccomp user notification re-reads user-memory pointers after a continue verdict. Path-based control belongs in static Landlock rules, or in <code class="inline">ctx.deny_path()</code> for runtime additions. <code class="inline">event.argv</code> is exposed and is TOCTOU-safe: the supervisor freezes peer tasks before exposing it.</li>
+</ol>

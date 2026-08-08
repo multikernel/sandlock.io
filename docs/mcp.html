@@ -1,0 +1,149 @@
+---
+layout: doc
+title: "MCP Server"
+description: "Sandlock's Model Context Protocol server: sandboxed shell, Python, and file tools for Claude Desktop, Cursor, and any MCP client, with a fresh sandbox per call."
+permalink: /docs/mcp.html
+short_title: "MCP Server"
+heading: "MCP Server"
+lede: "An MCP server whose tools execute inside a Landlock and seccomp sandbox, one per call. Deny by default: each tool declares the capabilities it needs and gets nothing else. No Docker required."
+---
+
+<h2>Install and run</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">cd</span> python &amp;&amp; <span class="k">pip install</span> -e <span class="s">'.[mcp]'</span>
+
+<span class="c"># local, stdio transport</span>
+<span class="p">$</span> <span class="k">sandlock-mcp</span> --workspace /tmp/sandbox
+
+<span class="c"># remote, SSE transport</span>
+<span class="p">$</span> <span class="k">sandlock-mcp</span> --transport sse --host 0.0.0.0 --port 8080 \
+    --workspace /tmp/sandbox</code></pre>
+</div>
+
+<p>The <code class="inline">mcp-remote</code> extra additionally pulls in <code class="inline">uvicorn</code> and <code class="inline">starlette</code> for the SSE transport.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Default</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>--workspace</code></th><td>auto-created temp dir</td><td>The one directory tools may write to</td></tr>
+            <tr><th scope="row"><code>--transport</code></th><td><code>stdio</code></td><td><code>stdio</code> or <code>sse</code></td></tr>
+            <tr><th scope="row"><code>--host</code></th><td><code>127.0.0.1</code></td><td>Bind address for the SSE transport</td></tr>
+            <tr><th scope="row"><code>--port</code></th><td><code>8080</code></td><td>Bind port for the SSE transport</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Client configuration</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Local (stdio)</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"sandlock"</span>: {
+      <span class="s">"command"</span>: <span class="s">"sandlock-mcp"</span>,
+      <span class="s">"args"</span>: [<span class="s">"--workspace"</span>, <span class="s">"/tmp/sandbox"</span>]
+    }
+  }
+}</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Remote (SSE)</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"sandlock"</span>: {
+      <span class="s">"url"</span>: <span class="s">"http://remote-host:8080/sse"</span>
+    }
+  }
+}</code></pre>
+</div>
+
+<h2>Built-in tools</h2>
+
+<p>Each tool runs in its own sandbox, built fresh for the call, with only the capabilities that tool declares.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Tool</th><th scope="col">Arguments</th><th scope="col">Capabilities granted</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row"><code>shell</code></th>
+                <td><code>command</code></td>
+                <td>Write access to the workspace. No network. Read-only filesystem otherwise.</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>python</code></th>
+                <td><code>code</code></td>
+                <td>256 MB of memory. No filesystem or network access.</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>read_file</code></th>
+                <td><code>path</code></td>
+                <td>None beyond the read-only baseline. Path is relative to the workspace root.</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>write_file</code></th>
+                <td><code>path</code>, <code>content</code></td>
+                <td>Write access to the workspace. Creates parent directories.</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>list_files</code></th>
+                <td><code>subdir</code> (optional)</td>
+                <td>None beyond the read-only baseline.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Custom tools</h2>
+
+<p><code class="inline">McpSandbox</code> is the mechanism underneath, and it is usable directly. It is deny-by-default: a tool added with no capabilities gets a read-only sandbox with no network, and anything more has to be named.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock.mcp <span class="k">import</span> McpSandbox
+
+mcp = McpSandbox(workspace=<span class="s">"/tmp/agent"</span>)
+
+mcp.add_tool(<span class="s">"read_file"</span>, read_fn)                     <span class="c"># read-only</span>
+mcp.add_tool(<span class="s">"write_file"</span>, write_fn,
+             capabilities={<span class="s">"fs_writable"</span>: [workspace]})   <span class="c"># write to workspace</span>
+
+result = <span class="k">await</span> mcp.call_tool(<span class="s">"write_file"</span>, {<span class="s">"path"</span>: <span class="s">"out.txt"</span>, <span class="s">"content"</span>: <span class="s">"hi"</span>})</code></pre>
+</div>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Tools must be top-level functions.</strong> Each call runs the tool in a fresh interpreter inside the sandbox, so the function has to be importable by name. Lambdas, methods, and nested or closure functions are rejected with a clear error rather than failing mysteriously at call time.</p>
+    </div>
+</div>
+
+<p>The worker is executed as a plain script rather than through <code class="inline">-m</code>, so it runs with only stdlib imports and never pulls the <code class="inline">sandlock</code> package, or its FFI shared library, into the sandbox with it.</p>
+
+<h2>Why this matters for agents</h2>
+
+<p>A tool-using agent is an arbitrary code execution primitive with a model deciding the arguments. The usual mitigation is to run tools in a container, which is heavy enough that most implementations reuse one, and reuse means one call's side effects are visible to the next.</p>
+
+<p>A Sandlock sandbox costs about 5 ms to start, so <strong>a fresh sandbox per call is affordable</strong>. Combined with deny-by-default capabilities, the blast radius of a tool call is the capabilities that tool declared, and nothing else.</p>
+
+<p>For agents that also need to reach an API, the same techniques from the CLI apply: an HTTP ACL restricting the agent to one method and path, and <a href="/docs/http-acl.html#credential-injection">credential injection</a> so the key stays in the supervisor and never enters the agent's address space.</p>

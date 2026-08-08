@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" role="img" aria-label="Sandlock">
+  <!-- Sandbox boundary drawn as four corner brackets: the confinement is a
+       perimeter the workload cannot cross, not a solid container. -->
+  <g stroke="#c9a13e" stroke-width="2.2" stroke-linecap="square" opacity="0.55">
+    <path d="M2.5 10.5V2.5h8"/>
+    <path d="M29.5 2.5h8v8"/>
+    <path d="M37.5 29.5v8h-8"/>
+    <path d="M10.5 37.5h-8v-8"/>
+  </g>
+  <!-- Lock body -->
+  <rect x="11" y="19" width="18" height="13" rx="1.5" fill="#c9a13e"/>
+  <!-- Shackle -->
+  <path d="M15 19v-3.5a5 5 0 0 1 10 0V19" stroke="#c9a13e" stroke-width="2.6" fill="none"/>
+  <!-- Keyway -->
+  <rect x="18.9" y="23" width="2.2" height="5.5" rx="1.1" fill="#0e1e33"/>
+</svg>

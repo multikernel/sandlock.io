@@ -1,0 +1,371 @@
+---
+layout: default
+title: "Use Cases"
+description: "How teams use Sandlock: AI agent tool execution, untrusted CI builds, multi-tenant code execution, data pipelines with split trust, and reproducible builds."
+permalink: /use-cases.html
+---
+
+<style>
+.usecase {
+    padding: var(--space-20) 0;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.usecase:nth-child(even) {
+    background: var(--gray-50);
+}
+
+.usecase-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.05fr;
+    gap: var(--space-12);
+    align-items: start;
+}
+
+.usecase-body h2 {
+    font-size: clamp(var(--text-2xl), 3vw, var(--text-3xl));
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--gray-900);
+    line-height: var(--leading-tight);
+    margin-bottom: var(--space-4);
+}
+
+.usecase-body h2::before {
+    content: '';
+    display: block;
+    width: 48px;
+    height: 3px;
+    margin-bottom: var(--space-4);
+    background: var(--accent-500);
+}
+
+.usecase-body > p {
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+    margin-bottom: var(--space-4);
+}
+
+.usecase-body strong {
+    color: var(--gray-900);
+    font-weight: 600;
+}
+
+.usecase-points {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+}
+
+.usecase-aside {
+    position: sticky;
+    top: calc(var(--header-height) + var(--space-8));
+}
+
+.usecase-aside .code-block {
+    margin-top: 0;
+}
+
+.who {
+    margin-top: var(--space-5);
+    padding: var(--space-4) var(--space-5);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-left: 3px solid var(--accent-500);
+    border-radius: var(--radius-md);
+}
+
+.usecase:nth-child(even) .who {
+    background: white;
+}
+
+.who .mono-label {
+    display: block;
+    margin-bottom: var(--space-2);
+}
+
+.who p {
+    font-size: var(--text-sm);
+    color: var(--gray-600);
+    line-height: var(--leading-relaxed);
+}
+
+.usecase-body a,
+.who a {
+    color: var(--accent-700);
+    text-decoration: underline;
+    text-decoration-color: rgba(201, 161, 62, 0.35);
+    text-underline-offset: 2px;
+}
+
+.usecase-body a:hover,
+.who a:hover {
+    color: var(--accent-600);
+    text-decoration-color: var(--accent-500);
+}
+
+@media (max-width: 1000px) {
+    .usecase-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-8);
+    }
+
+    .usecase-aside {
+        position: static;
+    }
+}
+</style>
+
+<section class="hero hero-page">
+    <div class="hero-container">
+        <div class="hero-badge">
+            <i data-lucide="target"></i>
+            <span>Use cases</span>
+        </div>
+        <h1>Code You Did Not Write, Running on Your Machine</h1>
+        <p class="subtitle">Every one of these has the same shape: something needs to execute, you cannot fully vouch for it, and wrapping it in a container is either too slow, too privileged, or not precise enough. These are the policies teams actually deploy.</p>
+    </div>
+</section>
+
+<section class="usecase" id="ai-agents">
+    <div class="section-container">
+        <div class="usecase-grid">
+            <div class="usecase-body">
+                <h2>AI Agents and Tool Execution</h2>
+                <p>An agent that can run shell commands is, by construction, an arbitrary code execution primitive driven by a model. It needs a workspace it can write to, one or two API endpoints, and nothing else. Handing it a container means handing it a container's whole worldview, including whatever credentials sit in the environment.</p>
+                <p>Sandlock inverts that. The agent gets exactly the paths and exactly the endpoints you name. <strong>The API key never enters the agent's address space at all</strong>: it lives in the supervisor, and is attached to the outbound request in the proxy after the ACL check has already passed.</p>
+
+                <div class="usecase-points">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>HTTP-level rules</strong>, not just <code class="inline">host:443</code>. Allow one method on one path.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Zero-config HTTPS interception.</strong> Sandlock generates an ephemeral CA, keeps the private key in memory, and splices the public cert into the trust bundles you name.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Credential stripped from the child.</strong> With <code class="inline">env:VAR</code> the variable is removed from the agent's environment, so it cannot read the key back out.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Runtime policy.</strong> A callback can revoke network access or deny a path the moment the agent finishes starting up.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>GPU selection is a boundary.</strong> <code class="inline">--gpu 0</code> makes the other device nodes unopenable, not merely hidden.</span></div>
+                </div>
+
+                <div class="who">
+                    <span class="mono-label">Also available as</span>
+                    <p>An <a href="/docs/mcp.html">MCP server</a> exposing sandboxed shell, Python, and file tools to Claude Desktop, Cursor, and any other MCP client, with a fresh sandbox per call.</p>
+                </div>
+            </div>
+
+            <div class="usecase-aside">
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Agent with one endpoint and no key</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    <span class="c"># the only endpoint that exists</span>
+    --http-allow <span class="s">"POST api.openai.com/v1/chat/completions"</span> \
+    --http-deny  <span class="s">"* */admin/*"</span> \
+    <span class="c"># trust the ephemeral CA, no install step</span>
+    --http-inject-ca /etc/ssl/certs/ca-certificates.crt \
+    <span class="c"># the key stays in the supervisor</span>
+    --credential openai=env:OPENAI_API_KEY \
+    --http-auth <span class="s">"POST api.openai.com/v1/* bearer openai"</span> \
+    <span class="c"># filesystem and resource envelope</span>
+    -r /usr -r /lib -r /etc -w /work \
+    -m 1G -P 32 -t 600 \
+    -- python3 agent.py</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="usecase" id="ci">
+    <div class="section-container">
+        <div class="usecase-grid">
+            <div class="usecase-body">
+                <h2>Untrusted CI Builds</h2>
+                <p>A pull request from a fork is untrusted code with a build script attached. The usual answers are a disposable VM per job, which is slow and expensive, or Docker on a shared runner, which means handing the job a socket that is equivalent to root.</p>
+                <p>Sandlock runs the build as an ordinary user with the network closed, the toolchain read-only, and the source tree copy-on-write. If the build succeeds the writes are committed; if it fails they are discarded. <strong><code class="inline">--dry-run</code> goes further and shows you the exact set of files a build would touch without letting any of it land.</strong></p>
+
+                <div class="usecase-points">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>No root, no daemon, no Docker socket</strong> on the runner.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>~5 ms of startup overhead</strong>, so per-step confinement is practical.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Reproducible builds.</strong> Freeze the clock, seed the PRNG, sort directory reads, and disable ASLR to remove the usual sources of nondeterminism.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Generated policies.</strong> <code class="inline">sandlock learn</code> observes a real build and emits a TOML profile of exactly what it touched.</span></div>
+                </div>
+
+                <div class="who">
+                    <span class="mono-label">Nesting</span>
+                    <p>A sandboxed job can itself run Sandlock. The inner invocation uses <code class="inline">--no-supervisor</code>, since the kernel permits only one seccomp notification listener per task.</p>
+                </div>
+            </div>
+
+            <div class="usecase-aside">
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Build a fork's PR, offline and reversible</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="c"># See what the build would change, change nothing</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --dry-run --workdir . \
+    -w . -r /usr -r /lib -r /bin -r /etc \
+    -- make build
+<span class="o">A  build/out.o</span>
+<span class="o">M  Cargo.lock</span>
+
+<span class="c"># Run it for real: no network, capped, COW-committed</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --workdir . \
+    -w . -r /usr -r /lib -r /bin -r /etc \
+    -m 4G -P 64 -t 1800 \
+    -- make -j4
+
+<span class="c"># Deterministic: frozen clock, seeded randomness</span>
+<span class="p">$</span> <span class="k">sandlock run</span> \
+    --time-start <span class="s">"2000-01-01T00:00:00Z"</span> \
+    --random-seed 42 --deterministic-dirs \
+    -- ./build.sh</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="usecase" id="multi-tenant">
+    <div class="section-container">
+        <div class="usecase-grid">
+            <div class="usecase-body">
+                <h2>Multi-Tenant Code Execution</h2>
+                <p>Notebook backends, code interpreters, autograders, and evaluation harnesses all run one untrusted snippet per request, thousands of times a day. Container startup dominates the request; a pool of warm containers trades that latency for cross-request contamination.</p>
+                <p>A Sandlock sandbox starts in about 5 ms, so a fresh one per request is affordable. <strong>Port virtualization gives every sandbox its own port space</strong>, so a hundred tenants can each bind port 8080, and <code class="inline">/proc/net/tcp</code> inside a sandbox shows only that sandbox's own sockets.</p>
+
+                <div class="usecase-points">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Fresh sandbox per request</strong>, with no pool and no reuse.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Named sandboxes</strong> get a stable virtual hostname, so a reverse proxy can route by name to the real port.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Fleet introspection.</strong> <code class="inline">sandlock ps</code> lists what is running; <code class="inline">sandlock inspect</code> prints a live sandbox's effective policy as JSON or TOML.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Virtualized <code class="inline">/proc</code>.</strong> Set the visible CPU count and memory size a tenant sees.</span></div>
+                </div>
+
+                <div class="who">
+                    <span class="mono-label">At scale</span>
+                    <p>COW fork initializes expensive state once, then forks clones that share memory copy-on-write: 1000 clones in about 530 ms, roughly 1,900 forks per second. Each clone inherits the full confinement.</p>
+                </div>
+            </div>
+
+            <div class="usecase-aside">
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Two tenants, same port, no collision</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> --name api.local --port-remap \
+    --net-allow-bind 8080 \
+    -r /usr -r /lib -r /etc -- python3 server.py &amp;
+
+<span class="p">$</span> <span class="k">sandlock run</span> --name web.local --port-remap \
+    --net-allow-bind 8080 \
+    -r /usr -r /lib -r /etc -- python3 server.py &amp;
+
+<span class="p">$</span> <span class="k">sandlock ps</span>
+<span class="o">NAME          PID      UPTIME  CMD</span>
+<span class="o">api.local     12345        5m  python3 server.py</span>
+<span class="o">web.local     12346        3m  python3 server.py</span>
+
+<span class="p">$</span> <span class="k">sandlock inspect</span> api.local --toml
+<span class="p">$</span> <span class="k">sandlock kill</span> web.local</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="usecase" id="data-pipelines">
+    <div class="section-container">
+        <div class="usecase-grid">
+            <div class="usecase-body">
+                <h2>Split-Trust Data Pipelines</h2>
+                <p>Some stages of a pipeline need the sensitive data; the stages that transform it do not. Normally that separation is a convention enforced by code review. Sandlock makes it a property of the process.</p>
+                <p>Chain stages with the <code class="inline">|</code> operator, giving each stage its own independent sandbox configuration. Data flows between them through kernel pipes, so <strong>the downstream stage sees the bytes but never gains the ability to open the source</strong>.</p>
+
+                <div class="usecase-points">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Per-stage policy.</strong> The reader has the data path; the processor does not.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>eXecute-Only Agents (XOA).</strong> A planner with no data access generates code; an executor with data access but no network runs it.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Map-reduce.</strong> Fork COW clones for the map phase, then pipe their stdout into a reducer running in a different sandbox with a different policy.</span></div>
+                </div>
+            </div>
+
+            <div class="usecase-aside">
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Python: reader has data, processor does not</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
+
+trusted = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>,
+                 <span class="s">"/etc"</span>, <span class="s">"/opt/data"</span>],
+)
+restricted = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>],
+)
+
+<span class="c"># restricted can never open /opt/data itself</span>
+result = (
+    trusted.cmd([<span class="s">"cat"</span>, <span class="s">"/opt/data/secret.csv"</span>])
+    | restricted.cmd([<span class="s">"tr"</span>, <span class="s">"a-z"</span>, <span class="s">"A-Z"</span>])
+).run()</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="usecase" id="kubernetes">
+    <div class="section-container">
+        <div class="usecase-grid">
+            <div class="usecase-body">
+                <h2>Hardened Workloads on Kubernetes</h2>
+                <p>If your workloads already ship as OCI images, you do not have to rewrite anything to get Sandlock's confinement. <code class="inline">sandlock-oci</code> implements the OCI Runtime Specification command interface, so containerd, CRI-O, and the kubelet can drive it as a drop-in low-level runtime in place of <code class="inline">runc</code>.</p>
+                <p>The difference is what happens underneath. Where <code class="inline">runc</code> builds a container from namespaces, cgroups, and <code class="inline">pivot_root</code>, <strong><code class="inline">sandlock-oci</code> produces a namespace-less container confined by Landlock and seccomp</strong>, running unprivileged. The OCI spec is translated by intent: memory and PID limits become resource caps, bind mounts become filesystem mappings, and <code class="inline">linux.namespaces</code> is ignored by design.</p>
+
+                <div class="usecase-points">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Drop-in.</strong> Accepts the runc flags containerd and CRI-O pass, including the ones that do not apply.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Checkpoint and restore</strong> a running sandbox to and from an image directory.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>OCI 1.0.x, 1.1.x, and 1.2.x</strong> bundles; anything else is rejected at create rather than mis-mapped.</span></div>
+                </div>
+            </div>
+
+            <div class="usecase-aside">
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Drive a bundle directly</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock-oci</span> create mycontainer -b /path/to/bundle
+<span class="p">$</span> <span class="k">sandlock-oci</span> start  mycontainer
+<span class="p">$</span> <span class="k">sandlock-oci</span> state  mycontainer
+<span class="p">$</span> <span class="k">sandlock-oci</span> exec   mycontainer sh -c <span class="s">'echo hello'</span>
+<span class="p">$</span> <span class="k">sandlock-oci</span> kill   mycontainer SIGTERM
+<span class="p">$</span> <span class="k">sandlock-oci</span> delete mycontainer
+
+<span class="c"># confirm the host kernel supports Landlock</span>
+<span class="p">$</span> <span class="k">sandlock-oci</span> check</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-band">
+    <div class="cta-band-inner">
+        <h2>Which One Is Yours?</h2>
+        <p>If your situation is close to one of these but not quite it, we would like to hear about it. The design partner program exists precisely for the cases the defaults do not cover.</p>
+        <div class="button-group">
+            <a href="/docs/getting-started.html" class="btn btn-primary">
+                <i data-lucide="rocket"></i>
+                Get Started
+            </a>
+            <a href="/enterprise.html" class="btn btn-secondary">
+                <i data-lucide="building-2"></i>
+                Talk to Us
+            </a>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,490 @@
+---
+layout: default
+title: "Sandlock - Kernel-Enforced Sandboxing for Untrusted Code"
+description: "Sandlock confines untrusted code on Linux using Landlock, seccomp-bpf, and seccomp user notification. No root, no containers, no hypervisor. 5 ms startup, 97% of bare-metal throughput."
+permalink: /
+---
+
+<style>
+/* Homepage-only composition */
+.hero-terminal {
+    max-width: 780px;
+    margin: var(--space-10) auto 0;
+    text-align: left;
+}
+
+.hero-terminal .code-block {
+    margin: 0;
+    background: rgba(0, 0, 0, 0.32);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.interfaces-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-4);
+}
+
+.interface-card {
+    display: block;
+    padding: var(--space-6);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-left: 3px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.interface-card:hover {
+    border-left-color: var(--accent-500);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.interface-card .name {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--gray-900);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.interface-card .name i {
+    width: 16px;
+    height: 16px;
+    color: var(--accent-600);
+}
+
+.interface-card p {
+    font-size: var(--text-sm);
+    color: var(--gray-600);
+    line-height: var(--leading-relaxed);
+}
+
+.pillars {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-5);
+    margin-top: var(--space-10);
+}
+
+.pillar {
+    padding: var(--space-6);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: 2px solid var(--accent-500);
+    border-radius: var(--radius-md);
+}
+
+.pillar h3 {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: white;
+    margin-bottom: var(--space-3);
+}
+
+.pillar p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 900px) {
+    .pillars {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<section class="hero hero-tall">
+    <div class="hero-container">
+        <div class="hero-badge">
+            <i data-lucide="shield"></i>
+            <span>Landlock · seccomp-bpf · seccomp notify</span>
+        </div>
+
+        <h1>Run Untrusted Code Without Handing It Your Machine</h1>
+        <p class="subtitle">Sandlock is a lightweight Linux process sandbox. It confines a command's filesystem, network, syscalls, and resources with kernel-enforced policy, in about 5 milliseconds. No root. No image build. No container runtime. No hypervisor.</p>
+
+        <div class="button-group">
+            <a href="/docs/getting-started.html" class="btn btn-primary">
+                <i data-lucide="rocket"></i>
+                Get Started
+            </a>
+            <a href="https://github.com/multikernel/sandlock" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+                <i data-lucide="github"></i>
+                View on GitHub
+            </a>
+        </div>
+
+        <div class="hero-terminal">
+            <div class="code-block">
+                <div class="code-block-header">
+                    <span class="code-block-title">Confine a Python agent</span>
+                    <button class="code-copy" type="button" aria-label="Copy command">
+                        <span class="code-copy-label">Copy</span>
+                    </button>
+                </div>
+<pre><code><span class="c"># Read-only system dirs, one writable dir, 512 MB cap,</span>
+<span class="c"># and exactly one host reachable on exactly one port.</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -r /usr -r /lib -r /etc -w /tmp \
+    -m 512M -P 20 -t 300 \
+    --net-allow <span class="s">api.openai.com:443</span> \
+    -- python3 agent.py</code></pre>
+            </div>
+        </div>
+
+        <div class="hero-stats">
+            <div class="hero-stat">
+                <span class="hero-stat-number">5 ms</span>
+                <span class="hero-stat-label">Startup overhead</span>
+                <span class="hero-stat-detail">44× faster to start than Docker</span>
+            </div>
+            <div class="hero-stat">
+                <span class="hero-stat-number">0</span>
+                <span class="hero-stat-label">Privileges required</span>
+                <span class="hero-stat-detail">No root, no setuid, no daemon</span>
+            </div>
+            <div class="hero-stat">
+                <span class="hero-stat-number">97%</span>
+                <span class="hero-stat-label">Of bare-metal throughput</span>
+                <span class="hero-stat-detail">Measured on Redis SET and GET</span>
+            </div>
+        </div>
+
+        <div class="hero-trust">
+            <p class="trust-text">Open source, Apache-2.0, built on upstream Linux</p>
+            <div class="trust-features">
+                <div class="trust-feature">
+                    <i data-lucide="lock"></i>
+                    <span>Kernel-enforced policy</span>
+                </div>
+                <div class="trust-feature">
+                    <i data-lucide="layers"></i>
+                    <span>No namespaces or cgroups</span>
+                </div>
+                <div class="trust-feature">
+                    <i data-lucide="terminal"></i>
+                    <span>CLI, Python, Rust, Go</span>
+                </div>
+                <div class="trust-feature">
+                    <i data-lucide="container"></i>
+                    <span>OCI runtime for Kubernetes</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The gap -->
+<section class="section section-alt">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="git-compare"></i>
+                <span>The gap</span>
+            </div>
+            <h2 class="section-title">Strict Confinement Without the Weight</h2>
+            <p class="section-subtitle">Containers and microVMs are powerful, but both were designed to package and boot a system. When all you need is to run one command you do not trust, they make you pay for a system anyway.</p>
+        </div>
+
+        <div class="cards-grid">
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="box"></i></div>
+                <h3 class="capability-title">Containers</h3>
+                <p class="capability-description">Require an image build, a runtime daemon, and root or a configured user-namespace setup. Every container shares the host kernel, and the isolation boundary is a namespace, not a policy the kernel evaluates per access.</p>
+                <div class="capability-features">
+                    <div class="feature-item"><i data-lucide="minus"></i><span>~200 ms to start</span></div>
+                    <div class="feature-item"><i data-lucide="minus"></i><span>Image build in the loop</span></div>
+                    <div class="feature-item"><i data-lucide="minus"></i><span>No HTTP-level control</span></div>
+                </div>
+            </div>
+
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="server"></i></div>
+                <h3 class="capability-title">MicroVMs</h3>
+                <p class="capability-description">A separate guest kernel gives a strong boundary, but it needs KVM, a guest image, and a device model. Nested virtualization inside a cloud VM adds real overhead, and there is no visibility into what the guest is doing at the syscall level.</p>
+                <div class="capability-features">
+                    <div class="feature-item"><i data-lucide="minus"></i><span>Requires KVM access</span></div>
+                    <div class="feature-item"><i data-lucide="minus"></i><span>Guest image to maintain</span></div>
+                    <div class="feature-item"><i data-lucide="minus"></i><span>Block-level filesystem only</span></div>
+                </div>
+            </div>
+
+            <div class="capability-card primary">
+                <div class="capability-icon"><i data-lucide="shield-check"></i></div>
+                <h3 class="capability-title">Sandlock</h3>
+                <p class="capability-description">A policy applied to a process. Landlock and seccomp-bpf enforce filesystem, network, IPC, and syscall rules in the kernel; a userspace supervisor adds resource limits, destination IP checks, HTTP method and path rules, and copy-on-write writes.</p>
+                <div class="capability-features">
+                    <div class="feature-item"><i data-lucide="check"></i><span>~5 ms to start, no image</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span>Runs as an ordinary user</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span>Method + host + path ACL</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Capabilities -->
+<section class="section">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="sliders-horizontal"></i>
+                <span>Capabilities</span>
+            </div>
+            <h2 class="section-title">One Policy, Six Enforcement Surfaces</h2>
+            <p class="section-subtitle">Every dimension of the sandbox is described in the same policy object, whether you write it as CLI flags, a TOML profile, or a struct in Python, Rust, or Go.</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon"><i data-lucide="folder-lock"></i></div>
+                <h3 class="feature-title">Filesystem</h3>
+                <p class="feature-description">Landlock grants read and write paths as recursive rules the kernel evaluates on every access, so the policy is immune to time-of-check/time-of-use races. Denied paths override broader grants.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon"><i data-lucide="network"></i></div>
+                <h3 class="feature-title">Network</h3>
+                <p class="feature-description">Default-deny egress. Allow a hostname, an IP, or a CIDR on specific ports over TCP, UDP, or ICMP, or invert it with a denylist. Bind ports are governed separately, and can be virtualized per sandbox.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon"><i data-lucide="globe-lock"></i></div>
+                <h3 class="feature-title">HTTP ACL</h3>
+                <p class="feature-description">Go past <code class="inline">host:443</code>: allow <code class="inline">POST api.openai.com/v1/chat/completions</code> and nothing else. Zero-config HTTPS interception generates an ephemeral CA and splices it into the trust bundles you name.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon"><i data-lucide="key-round"></i></div>
+                <h3 class="feature-title">Credential injection</h3>
+                <p class="feature-description">The API key lives in the supervisor and is attached to the request in the proxy, strictly after the ACL check. The sandboxed process never holds the secret and cannot exfiltrate it.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon"><i data-lucide="copy"></i></div>
+                <h3 class="feature-title">Copy-on-write</h3>
+                <p class="feature-description">Writes under the working directory are staged in an upper layer and committed on success or discarded on failure. <code class="inline">--dry-run</code> shows exactly which files a command would add, modify, or delete.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon"><i data-lucide="gauge"></i></div>
+                <h3 class="feature-title">Resources</h3>
+                <p class="feature-description">Memory, process count, open files, CPU percentage, disk quota, CPU pinning, and GPU device selection, all without cgroups. A given GPU index is a hard Landlock boundary, not an environment variable.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- How it works -->
+<section class="section section-dark">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="cpu"></i>
+                <span>How it works</span>
+            </div>
+            <h2 class="section-title">Kernel First, Supervisor Second</h2>
+            <p class="section-subtitle">Sandlock forks, installs confinement in the child before it executes anything, and only then lets the workload start. What the kernel can enforce, the kernel enforces.</p>
+        </div>
+
+        <div class="ascii-diagram">
+<pre>Parent                              Child
+  │  fork()                           │
+  │──────────────────────────────────>│
+  │                                   ├─ 1. setpgid(0,0)
+  │                                   ├─ 2. Optional: chdir(cwd)
+  │                                   ├─ 3. <span class="hi">NO_NEW_PRIVS</span>
+  │                                   ├─ 4. <span class="hi">Landlock</span> (fs + net + IPC)
+  │                                   ├─ 5. <span class="hi">seccomp filter</span> (deny + notif)
+  │                                   │     └─ send notif fd ──> Parent
+  │  receive notif fd                 ├─ 6. Wait for "ready" signal
+  │  start supervisor (tokio)         ├─ 7. Close fds 3+
+  │  optional: vDSO patching          └─ 8. <span class="hi">exec(cmd)</span>
+  │  optional: policy_fn thread
+  │  optional: CPU throttle task</pre>
+        </div>
+
+        <div class="pillars">
+            <div class="pillar">
+                <h3>Landlock</h3>
+                <p>Unprivileged, kernel-evaluated access control for filesystem paths, TCP connect and bind ports, and IPC scoping. Applied once and irreversible for the lifetime of the process tree.</p>
+            </div>
+            <div class="pillar">
+                <h3>seccomp-bpf</h3>
+                <p>A default blocklist removes syscall families a confined workload has no business using. Extra denials compose on top; the blocklist itself is always applied.</p>
+            </div>
+            <div class="pillar">
+                <h3>seccomp notify</h3>
+                <p>The supervisor sees selected syscalls before they run: destination IP checks, memory and process accounting, COW interception, /proc virtualization, and port remapping.</p>
+            </div>
+        </div>
+
+        <div class="text-center" style="margin-top: var(--space-10);">
+            <a href="/how-it-works.html" class="btn btn-secondary">
+                <i data-lucide="arrow-right"></i>
+                Read the architecture
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Performance -->
+<section class="section">
+    <div class="section-container narrow">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="activity"></i>
+                <span>Performance</span>
+            </div>
+            <h2 class="section-title">Confinement You Can Leave On</h2>
+            <p class="section-subtitle">Landlock and the seccomp blocklist cost nothing per syscall once installed. Only the syscalls the supervisor explicitly registers for take a userspace round trip.</p>
+        </div>
+
+        <div class="data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Workload</th>
+                        <th scope="col">Bare metal</th>
+                        <th scope="col" class="col-highlight">Sandlock</th>
+                        <th scope="col">Docker</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row"><code>/bin/echo</code> startup</th>
+                        <td>2 ms</td>
+                        <td class="col-highlight">7 ms</td>
+                        <td>307 ms</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Redis SET, 100K ops</th>
+                        <td>82K rps</td>
+                        <td class="col-highlight">80K rps</td>
+                        <td>52K rps</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Redis GET, 100K ops</th>
+                        <td>79K rps</td>
+                        <td class="col-highlight">77K rps</td>
+                        <td>53K rps</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Redis p99 latency</th>
+                        <td>0.5 ms</td>
+                        <td class="col-highlight">0.6 ms</td>
+                        <td>1.5 ms</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">COW fork × 1000</th>
+                        <td>&mdash;</td>
+                        <td class="col-highlight">530 ms</td>
+                        <td>&mdash;</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="table-note">Measured on a typical Linux workstation. Redis under Sandlock holds 97.1% of bare-metal throughput. COW fork produces roughly 1,900 forks per second, or 530 µs per clone.</p>
+    </div>
+</section>
+
+<!-- Interfaces -->
+<section class="section section-alt">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="plug"></i>
+                <span>Interfaces</span>
+            </div>
+            <h2 class="section-title">Reach for It From Where You Already Are</h2>
+            <p class="section-subtitle">One Rust core, exposed through a CLI, a C ABI, three language SDKs, an OCI runtime, and an MCP server. Every surface takes the same policy.</p>
+        </div>
+
+        <div class="interfaces-grid">
+            <a href="/docs/cli.html" class="interface-card">
+                <div class="name"><i data-lucide="terminal"></i>CLI</div>
+                <p><code class="inline">sandlock run</code>, plus <code class="inline">ps</code>, <code class="inline">inspect</code>, <code class="inline">kill</code>, <code class="inline">learn</code>, and profile management.</p>
+            </a>
+            <a href="/docs/python.html" class="interface-card">
+                <div class="name"><i data-lucide="file-code"></i>Python SDK</div>
+                <p>A <code class="inline">Sandbox</code> dataclass, pipelines, COW fork/reduce, and Python callbacks for dynamic policy.</p>
+            </a>
+            <a href="/docs/rust.html" class="interface-card">
+                <div class="name"><i data-lucide="file-code-2"></i>Rust API</div>
+                <p>The core library itself: a typed builder, async execution, and custom seccomp-notify handlers.</p>
+            </a>
+            <a href="/docs/go.html" class="interface-card">
+                <div class="name"><i data-lucide="file-code"></i>Go SDK</div>
+                <p>cgo bindings over the C ABI, with a plain configuration struct that is safe to share across goroutines.</p>
+            </a>
+            <a href="/docs/oci.html" class="interface-card">
+                <div class="name"><i data-lucide="container"></i>OCI runtime</div>
+                <p>A drop-in low-level runtime for containerd, CRI-O, and Kubernetes. Namespace-less and cgroup-less.</p>
+            </a>
+            <a href="/docs/mcp.html" class="interface-card">
+                <div class="name"><i data-lucide="bot"></i>MCP server</div>
+                <p>Sandboxed shell, Python, and file tools for Claude Desktop, Cursor, and any other MCP client.</p>
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Use cases -->
+<section class="section">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="target"></i>
+                <span>Where teams use it</span>
+            </div>
+            <h2 class="section-title">Built for Code You Did Not Write</h2>
+        </div>
+
+        <div class="cards-grid">
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="bot"></i></div>
+                <h3 class="capability-title">AI agents and tool use</h3>
+                <p class="capability-description">Give an agent a workspace, one API endpoint, and nothing else. Credential injection keeps the key out of the agent's reach, and a policy callback can revoke network access the moment the agent finishes starting up.</p>
+                <a href="/use-cases.html#ai-agents" class="btn-link">Read more <i data-lucide="arrow-right"></i></a>
+            </div>
+
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="git-branch"></i></div>
+                <h3 class="capability-title">CI and untrusted builds</h3>
+                <p class="capability-description">Run a pull request's build steps with the source tree copy-on-write, the network closed, and a memory cap, on a shared runner with no root and no Docker socket to hand out.</p>
+                <a href="/use-cases.html#ci" class="btn-link">Read more <i data-lucide="arrow-right"></i></a>
+            </div>
+
+            <div class="capability-card">
+                <div class="capability-icon"><i data-lucide="users"></i></div>
+                <h3 class="capability-title">Multi-tenant code execution</h3>
+                <p class="capability-description">Notebook backends, code interpreters, and grading systems that start a fresh sandbox per request. Port virtualization lets every tenant bind the same port without collision.</p>
+                <a href="/use-cases.html#multi-tenant" class="btn-link">Read more <i data-lucide="arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-band">
+    <div class="cta-band-inner">
+        <h2>Start Confining in Under Five Minutes</h2>
+        <p>Sandlock is Apache-2.0 licensed and builds from source with Cargo. For production deployments, our team works directly with platform teams through the Multikernel design partner program.</p>
+        <div class="button-group">
+            <a href="/docs/getting-started.html" class="btn btn-primary">
+                <i data-lucide="rocket"></i>
+                Get Started
+            </a>
+            <a href="/enterprise.html" class="btn btn-secondary">
+                <i data-lucide="building-2"></i>
+                Enterprise Support
+            </a>
+        </div>
+    </div>
+</section>

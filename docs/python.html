@@ -1,0 +1,315 @@
+---
+layout: doc
+title: "Python SDK"
+description: "The Sandlock Python SDK: the Sandbox dataclass, running commands, pipelines, dry-run, COW fork and reduce, confining the current process, and policy callbacks."
+permalink: /docs/python.html
+short_title: "Python SDK"
+heading: "Python SDK"
+lede: "ctypes bindings over the C ABI. A Sandbox is a plain dataclass describing policy, with no runtime state, so it can be built once and reused across calls."
+---
+
+<h2>Install</h2>
+
+<p>The package builds the Rust FFI library during installation, so a Rust toolchain must be present. Python 3.8 or later is required.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">cd</span> python
+<span class="p">$</span> <span class="k">pip install</span> -e .
+
+<span class="c"># with the MCP server</span>
+<span class="p">$</span> <span class="k">pip install</span> -e <span class="s">'.[mcp]'</span></code></pre>
+</div>
+
+<h2>Running a command</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
+
+sandbox = Sandbox(
+    fs_writable=[<span class="s">"/tmp/sandbox"</span>],
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    max_memory=<span class="s">"256M"</span>,
+    max_processes=10,
+    clean_env=<span class="k">True</span>,
+)
+
+result = sandbox.run([<span class="s">"python3"</span>, <span class="s">"-c"</span>, <span class="s">"print('hello')"</span>], timeout=30)
+<span class="k">assert</span> result.success
+<span class="k">assert</span> <span class="s">b"hello"</span> <span class="k">in</span> result.stdout</code></pre>
+</div>
+
+<p>The result carries <code class="inline">success</code>, <code class="inline">exit_code</code>, <code class="inline">stdout</code>, <code class="inline">stderr</code>, and <code class="inline">error</code>. Output is bytes, not text, because a sandboxed workload's output is not guaranteed to be valid UTF-8.</p>
+
+<h2>The policy object</h2>
+
+<p>Every field is optional, and omitting one means "no restriction" beyond Sandlock's default seccomp blocklist, which is always applied. The grouping below matches the TOML profile sections.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Full constructor</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox, BranchAction
+
+sandbox = Sandbox(
+    <span class="c"># [config]</span>
+    http_ca=<span class="k">None</span>, http_key=<span class="k">None</span>,
+    fs_storage=<span class="k">None</span>, workdir=<span class="k">None</span>,
+
+    <span class="c"># [determinism]</span>
+    random_seed=<span class="k">None</span>, time_start=<span class="k">None</span>,
+    deterministic_dirs=<span class="k">False</span>, no_randomize_memory=<span class="k">False</span>,
+
+    <span class="c"># [program] — exec and args are arguments to .run() / .cmd()</span>
+    env={}, cwd=<span class="k">None</span>, uid=<span class="k">None</span>, gid=<span class="k">None</span>,
+    clean_env=<span class="k">False</span>, no_coredump=<span class="k">False</span>, no_huge_pages=<span class="k">False</span>,
+    no_supervisor=<span class="k">False</span>,
+
+    <span class="c"># [filesystem]</span>
+    fs_readable=(), fs_writable=(), fs_denied=(),
+    chroot=<span class="k">None</span>, fs_mount={},
+    on_exit=BranchAction.COMMIT, on_error=BranchAction.ABORT,
+
+    <span class="c"># [network]</span>
+    net_allow_bind=(), net_allow=(), port_remap=<span class="k">False</span>,
+
+    <span class="c"># [http]</span>
+    http_ports=(), http_allow=(), http_deny=(),
+
+    <span class="c"># [syscalls]</span>
+    extra_allow_syscalls=(), extra_deny_syscalls=(),
+
+    <span class="c"># [limits]</span>
+    max_memory=<span class="k">None</span>, max_processes=64, max_open_files=<span class="k">None</span>,
+    max_cpu=<span class="k">None</span>, max_disk=<span class="k">None</span>,
+    gpu_devices=<span class="k">None</span>, cpu_cores=<span class="k">None</span>, num_cpus=<span class="k">None</span>,
+
+    <span class="c"># runtime kwargs, not serialized as policy</span>
+    name=<span class="k">None</span>, policy_fn=<span class="k">None</span>, init_fn=<span class="k">None</span>, work_fn=<span class="k">None</span>,
+)</code></pre>
+</div>
+
+<p>The <a href="/docs/reference.html">sandbox reference</a> documents every field's type, default, and behaviour, including where a Python name differs from its TOML key.</p>
+
+<h2>HTTP ACL</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>agent = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    http_allow=[<span class="s">"POST api.openai.com/v1/chat/completions"</span>],
+    http_deny=[<span class="s">"* */admin/*"</span>],
+)
+result = agent.run([<span class="s">"python3"</span>, <span class="s">"agent.py"</span>])</code></pre>
+</div>
+
+<h2>chroot and mounts</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>chrooted = Sandbox(
+    chroot=<span class="s">"/opt/rootfs"</span>,
+    fs_mount={<span class="s">"/work"</span>: <span class="s">"/tmp/sandbox-1/work"</span>},  <span class="c"># maps /work inside chroot</span>
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/bin"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    cwd=<span class="s">"/work"</span>,
+)
+result = chrooted.run([<span class="s">"python3"</span>, <span class="s">"task.py"</span>])</code></pre>
+</div>
+
+<p>The Python mapping cannot express a read-only mount and rejects <code class="inline">:ro</code> entries with <code class="inline">PolicyError</code>. Load such a profile through the CLI with <code class="inline">--profile-file</code>, or use the C ABI's <code class="inline">sandlock_sandbox_builder_fs_mount_ro</code>.</p>
+
+<h2>Dry-run</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sandbox = Sandbox(
+    fs_writable=[<span class="s">"."</span>],
+    workdir=<span class="s">"."</span>,
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>],
+)
+result = sandbox.dry_run([<span class="s">"make"</span>, <span class="s">"build"</span>])
+
+<span class="k">for</span> c <span class="k">in</span> result.changes:
+    <span class="k">print</span>(<span class="s">f"{c.kind}  {c.path}"</span>)  <span class="c"># A=added, M=modified, D=deleted</span></code></pre>
+</div>
+
+<h2>Pipelines</h2>
+
+<p>Chain sandboxed stages with the <code class="inline">|</code> operator. Each stage has its own independent policy, and data flows between them through kernel pipes, so a downstream stage sees the bytes without gaining the upstream stage's access.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
+
+trusted = Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>, <span class="s">"/opt/data"</span>])
+restricted = Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>])
+
+<span class="c"># reader can access the data, processor cannot</span>
+result = (
+    trusted.cmd([<span class="s">"cat"</span>, <span class="s">"/opt/data/secret.csv"</span>])
+    | restricted.cmd([<span class="s">"tr"</span>, <span class="s">"a-z"</span>, <span class="s">"A-Z"</span>])
+).run()
+<span class="k">assert</span> <span class="s">b"SECRET"</span> <span class="k">in</span> result.stdout</code></pre>
+</div>
+
+<h3>The XOA pattern</h3>
+
+<p>eXecute-Only Agents: a planner with no data access generates code, and an executor with data access but no network runs it. Neither stage ever holds both capabilities.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>planner  = Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>])
+executor = Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>, <span class="s">"/data"</span>])
+
+result = (
+    planner.cmd([<span class="s">"python3"</span>, <span class="s">"-c"</span>, <span class="s">"print('cat /data/input.txt')"</span>])
+    | executor.cmd([<span class="s">"sh"</span>])
+).run()</code></pre>
+</div>
+
+<h2>COW fork and map-reduce</h2>
+
+<p>Initialize expensive state once, then fork clones that share the template's memory copy-on-write. A thousand clones take about 530 ms, roughly 1,900 forks per second, and each clone inherits the full confinement with <code class="inline">CLONE_ID</code> set automatically.</p>
+
+<p>Each clone's stdout is captured through its own pipe, and <code class="inline">reduce()</code> reads all of those pipes and feeds the combined output to a reducer's stdin. The mapper and reducer are separate sandboxes with different policies, which is what lets the mapper hold data access the reducer does not.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
+
+<span class="k">def</span> init():
+    <span class="k">global</span> model, data
+    model = load_model()          <span class="c"># 2 GB, loaded once</span>
+    data = preprocess_dataset()
+
+<span class="k">def</span> work(clone_id):
+    shard = data[clone_id::4]
+    <span class="k">print</span>(sum(shard))             <span class="c"># stdout → per-clone pipe</span>
+
+<span class="c"># Map: fork 4 clones from the template</span>
+mapper = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>, <span class="s">"/data"</span>],
+    init_fn=init,
+    work_fn=work,
+)
+clones = mapper.fork(4)
+
+<span class="c"># Reduce: pipe clone outputs into a reducer with no data access</span>
+reducer = Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>])
+result = reducer.reduce(
+    [<span class="s">"python3"</span>, <span class="s">"-c"</span>, <span class="s">"import sys; print(sum(int(l) for l in sys.stdin))"</span>],
+    clones,
+)
+<span class="k">print</span>(result.stdout)</code></pre>
+</div>
+
+<h2>Confining the current process</h2>
+
+<p><code class="inline">confine()</code> applies Landlock filesystem rules to the running process rather than spawning a child. It is <strong>irreversible</strong>: there is no way to widen the ruleset afterwards, by design.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox, confine
+
+confine(Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>], fs_writable=[<span class="s">"/tmp"</span>]))</code></pre>
+</div>
+
+<h2>Port virtualization</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sb = Sandbox(
+    port_remap=<span class="k">True</span>,
+    net_allow_bind=[8080],
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    name=<span class="s">"api.local"</span>,
+)
+<span class="c"># sb.ports() returns {virtual_port: real_port} while running</span></code></pre>
+</div>
+
+<h2>Dynamic policy and handlers</h2>
+
+<p>The <code class="inline">policy_fn</code> callback and the <code class="inline">Handler</code> API are covered on <a href="/docs/policy.html">Dynamic Policy</a>. In brief:</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">def</span> on_event(event, ctx):
+    <span class="k">if</span> event.syscall == <span class="s">"execve"</span> <span class="k">and</span> event.argv_contains(<span class="s">"curl"</span>):
+        <span class="k">return True</span>              <span class="c"># deny with EPERM</span>
+    <span class="k">if</span> event.syscall == <span class="s">"execve"</span>:
+        ctx.restrict_network([])   <span class="c"># lock down after startup</span>
+    <span class="k">return</span> 0                       <span class="c"># allow</span>
+
+sandbox = Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>], policy_fn=on_event)</code></pre>
+</div>
+
+<h2>Helpers and types</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> parse_ports
+
+parse_ports([80, <span class="s">"443"</span>, <span class="s">"8000-8005"</span>])
+<span class="c"># => [80, 443, 8000, 8001, 8002, 8003, 8004, 8005]</span></code></pre>
+</div>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Type</th><th scope="col">Fields</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>BranchAction</code></th><td><code>COMMIT</code>, <code>ABORT</code>, <code>KEEP</code></td></tr>
+            <tr><th scope="row"><code>Change</code></th><td><code>kind</code> (<code>"A"</code>, <code>"M"</code>, <code>"D"</code>), <code>path</code> relative to workdir</td></tr>
+            <tr><th scope="row"><code>DryRunResult</code></th><td><code>success</code>, <code>exit_code</code>, <code>stdout</code>, <code>stderr</code>, <code>changes</code>, <code>error</code></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Testing</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">cd</span> python &amp;&amp; <span class="k">pip install</span> -e . &amp;&amp; <span class="k">pytest</span> tests/</code></pre>
+</div>

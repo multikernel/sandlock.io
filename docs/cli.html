@@ -1,0 +1,286 @@
+---
+layout: doc
+title: "CLI Reference"
+description: "Complete reference for the sandlock command: run, check, ps, inspect, kill, profile, and learn, with every flag grouped by policy area."
+permalink: /docs/cli.html
+short_title: "CLI Reference"
+heading: "CLI Reference"
+lede: "Every subcommand and flag of the sandlock binary. Flags are grouped by the policy area they affect, which is the same grouping the TOML profile schema and the SDKs use."
+---
+
+<h2>Subcommands</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Command</th>
+                <th scope="col">Purpose</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>sandlock run</code></th><td>Run a command in a sandbox</td></tr>
+            <tr><th scope="row"><code>sandlock check</code></th><td>Report the host kernel's Landlock support</td></tr>
+            <tr><th scope="row"><code>sandlock ps</code></th><td>List running sandboxes with uptime and command</td></tr>
+            <tr><th scope="row"><code>sandlock inspect &lt;name&gt;</code></th><td>Print a running sandbox's effective policy as JSON, or TOML with <code>--toml</code></td></tr>
+            <tr><th scope="row"><code>sandlock kill &lt;name&gt;</code></th><td>Kill a running sandbox by name</td></tr>
+            <tr><th scope="row"><code>sandlock profile</code></th><td><code>list</code>, <code>show &lt;name&gt;</code>, or <code>delete &lt;name&gt;</code></td></tr>
+            <tr><th scope="row"><code>sandlock learn</code></th><td>Observe a workload and emit a profile of what it used</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>sandlock run</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Synopsis</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sandlock run [flags] -- &lt;cmd&gt; [args...]</code></pre>
+</div>
+
+<p>Everything after <code class="inline">--</code> is the command. When a profile supplies <code class="inline">[program].exec</code>, the command may be omitted; a trailing command overrides the profile's.</p>
+
+<h3>Filesystem</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>-r, --fs-read &lt;PATH&gt;</code></th><td>Grant read access. Recursive, repeatable.</td></tr>
+            <tr><th scope="row"><code>-w, --fs-write &lt;PATH&gt;</code></th><td>Grant read and write access. Recursive, repeatable.</td></tr>
+            <tr><th scope="row"><code>--fs-deny &lt;PATH&gt;</code></th><td>Deny a path even where a broader rule allows it.</td></tr>
+            <tr><th scope="row"><code>--chroot &lt;PATH&gt;</code></th><td>chroot into this directory before applying the rest of the confinement.</td></tr>
+            <tr><th scope="row"><code>--fs-mount &lt;VIRTUAL:HOST[:ro]&gt;</code></th><td>Map a host path inside the chroot. Append <code>:ro</code> for read-only; <code>:rw</code> is the default.</td></tr>
+            <tr><th scope="row"><code>--image &lt;IMAGE&gt;</code></th><td>Use a local Docker image as the chroot rootfs. The image must already exist locally; sandlock never pulls from a registry.</td></tr>
+            <tr><th scope="row"><code>--workdir &lt;PATH&gt;</code></th><td>COW root directory. Controls which tree COW tracks; does not set the child's working directory.</td></tr>
+            <tr><th scope="row"><code>--cwd &lt;PATH&gt;</code></th><td>Child working directory.</td></tr>
+            <tr><th scope="row"><code>--fs-storage &lt;PATH&gt;</code></th><td>Where the COW upper layer and deltas live.</td></tr>
+            <tr><th scope="row"><code>--on-exit &lt;ACTION&gt;</code></th><td>COW branch action on normal exit: <code>commit</code> (default), <code>abort</code>, <code>keep</code>.</td></tr>
+            <tr><th scope="row"><code>--on-error &lt;ACTION&gt;</code></th><td>COW branch action on error: <code>abort</code> (default), <code>commit</code>, <code>keep</code>.</td></tr>
+            <tr><th scope="row"><code>--dry-run</code></th><td>Run the command, report the filesystem changes it would make, then discard them.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Network</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>--net-allow &lt;SPEC&gt;</code></th><td>Outbound allowlist rule. Repeatable. Mutually exclusive with <code>--net-deny</code>.</td></tr>
+            <tr><th scope="row"><code>--net-deny &lt;SPEC&gt;</code></th><td>Outbound denylist rule; targets must be literal IPs or CIDRs. Repeatable.</td></tr>
+            <tr><th scope="row"><code>--net-allow-bind &lt;PORTS&gt;</code></th><td>TCP ports the sandbox may bind. Comma-separated ports or <code>lo-hi</code> ranges; <code>*</code> allows any.</td></tr>
+            <tr><th scope="row"><code>--net-deny-bind &lt;PORTS&gt;</code></th><td>TCP ports the sandbox may not bind. Mutually exclusive with <code>--net-allow-bind</code>.</td></tr>
+            <tr><th scope="row"><code>--port-remap</code></th><td>Give the sandbox its own virtual TCP port space.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The rule grammar, protocol gating, and DNS behaviour are covered in <a href="/docs/network.html">the network model</a>.</p>
+
+<h3>HTTP and credentials</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>--http-allow &lt;RULE&gt;</code></th><td>Allow rule, <code>"METHOD host/path"</code>. Repeatable.</td></tr>
+            <tr><th scope="row"><code>--http-deny &lt;RULE&gt;</code></th><td>Deny rule, checked before allow rules. Repeatable.</td></tr>
+            <tr><th scope="row"><code>--http-port &lt;PORT&gt;</code></th><td>TCP port to intercept. Defaults to 80; 443 is added when a CA is configured.</td></tr>
+            <tr><th scope="row"><code>--http-ca &lt;PATH&gt;</code></th><td>PEM CA certificate for HTTPS interception.</td></tr>
+            <tr><th scope="row"><code>--http-key &lt;PATH&gt;</code></th><td>PEM CA private key. Required with <code>--http-ca</code>.</td></tr>
+            <tr><th scope="row"><code>--http-inject-ca &lt;PATH&gt;</code></th><td>Splice the active CA's public cert into this trust bundle at open time. Without <code>--http-ca</code>, generates an ephemeral CA. Repeatable.</td></tr>
+            <tr><th scope="row"><code>--http-ca-out &lt;PATH&gt;</code></th><td>Write the active CA's public certificate here. Never the private key.</td></tr>
+            <tr><th scope="row"><code>--credential &lt;NAME=SOURCE&gt;</code></th><td>Load a secret into the supervisor. Source is <code>env:VAR</code>, <code>file:PATH</code>, or <code>fd:N</code>.</td></tr>
+            <tr><th scope="row"><code>--http-auth &lt;RULE&gt;</code></th><td>Attach a loaded credential: <code>"METHOD HOST/PATH AUTHSPEC NAME [replace|add-only]"</code>.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>See <a href="/docs/http-acl.html">HTTP ACL and credential injection</a> for the rule syntax and the auth specs.</p>
+
+<h3>Resource limits</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>-m, --max-memory &lt;SIZE&gt;</code></th><td>Memory limit, for example <code>512M</code> or <code>1G</code>.</td></tr>
+            <tr><th scope="row"><code>-P, --max-processes &lt;N&gt;</code></th><td>Maximum concurrent processes. Defaults to 64. Threads do not count.</td></tr>
+            <tr><th scope="row"><code>--max-open-files &lt;N&gt;</code></th><td>Maximum open descriptors, enforced with <code>RLIMIT_NOFILE</code>.</td></tr>
+            <tr><th scope="row"><code>-c, --cpu &lt;PERCENT&gt;</code></th><td>CPU throttle as a percentage of one core, 1 to 100.</td></tr>
+            <tr><th scope="row"><code>--max-disk &lt;SIZE&gt;</code></th><td>COW storage quota. Exceeding it returns <code>ENOSPC</code>.</td></tr>
+            <tr><th scope="row"><code>--cpu-cores &lt;N,N,...&gt;</code></th><td>Pin the sandbox to these cores with <code>sched_setaffinity</code>.</td></tr>
+            <tr><th scope="row"><code>--num-cpus &lt;N&gt;</code></th><td>Visible CPU count in <code>/proc/cpuinfo</code>, renumbered from 0.</td></tr>
+            <tr><th scope="row"><code>--gpu &lt;all|N,N,...&gt;</code></th><td>GPUs the sandbox may open. A hard Landlock boundary, not an environment hint.</td></tr>
+            <tr><th scope="row"><code>-t, --timeout &lt;SECS&gt;</code></th><td>Kill the sandbox after this many seconds.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Process and environment</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>--env &lt;KEY=VALUE&gt;</code></th><td>Set or override an environment variable. Applied after <code>--clean-env</code>. Repeatable.</td></tr>
+            <tr><th scope="row"><code>--clean-env</code></th><td>Start from a minimal environment (<code>PATH</code>, <code>HOME</code>, <code>USER</code>, <code>TERM</code>, <code>LANG</code>) rather than inheriting.</td></tr>
+            <tr><th scope="row"><code>--user &lt;UID:GID&gt;</code></th><td>Map the child to this uid and gid inside a user namespace. Both or neither.</td></tr>
+            <tr><th scope="row"><code>--name &lt;NAME&gt;</code></th><td>Sandbox name and virtual hostname. Auto-generated when omitted.</td></tr>
+            <tr><th scope="row"><code>-i, --interactive</code></th><td>Inherit the terminal instead of capturing stdout and stderr.</td></tr>
+            <tr><th scope="row"><code>-e, --exec-shell &lt;CMD&gt;</code></th><td>Run a command string through a shell.</td></tr>
+            <tr><th scope="row"><code>--no-coredump</code></th><td><code>prctl(PR_SET_DUMPABLE, 0)</code>. Also restricts other processes' access to <code>/proc/&lt;pid&gt;</code>. Breaks gdb, strace, and perf.</td></tr>
+            <tr><th scope="row"><code>--no-huge-pages</code></th><td>Disable transparent huge pages for the child.</td></tr>
+            <tr><th scope="row"><code>--status-fd &lt;FD&gt;</code></th><td>Report sandbox status on this descriptor.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Syscalls and protections</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>--extra-deny-syscall &lt;NAME|GROUP&gt;</code></th><td>Block additional syscalls or groups on top of the default blocklist.</td></tr>
+            <tr><th scope="row"><code>--extra-allow-syscall &lt;GROUP&gt;</code></th><td>Re-allow a named group such as <code>sysv_ipc</code>. Individual syscall names are rejected.</td></tr>
+            <tr><th scope="row"><code>--no-supervisor</code></th><td>Landlock plus a deny-only seccomp filter, with no supervisor process. Required when nesting.</td></tr>
+            <tr><th scope="row"><code>--allow-degraded &lt;PROTECTION&gt;</code></th><td>Enforce a protection where the kernel supports it, skip it where it does not. Repeatable.</td></tr>
+            <tr><th scope="row"><code>--disable &lt;PROTECTION&gt;</code></th><td>Never enforce a protection. Repeatable.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>Protection names are <code class="inline">fs-refer</code>, <code class="inline">fs-truncate</code>, <code class="inline">net-tcp</code>, <code class="inline">fs-ioctl-dev</code>, <code class="inline">signal-scope</code>, and <code class="inline">abstract-unix-socket-scope</code>. <code class="inline">--disable fs-refer</code> is rejected: the kernel denies REFER by default when the rule is unhandled, so disabling it would only tighten the sandbox and the flag would be misleading.</p>
+
+<h3>Determinism</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>--random-seed &lt;N&gt;</code></th><td>Seed deterministic <code>getrandom()</code>. Identical seeds produce identical byte streams.</td></tr>
+            <tr><th scope="row"><code>--time-start &lt;TIME&gt;</code></th><td>Frozen start time as a Unix timestamp or an RFC 3339 string. Time then advances at real speed.</td></tr>
+            <tr><th scope="row"><code>--deterministic-dirs</code></th><td>Sort <code>readdir()</code> entries lexicographically.</td></tr>
+            <tr><th scope="row"><code>--no-randomize-memory</code></th><td>Disable ASLR via <code>personality(ADDR_NO_RANDOMIZE)</code>.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Profiles</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Flag</th><th scope="col">Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>-p, --profile &lt;NAME&gt;</code></th><td>Load a profile from <code>~/.config/sandlock/profiles/</code>.</td></tr>
+            <tr><th scope="row"><code>--profile-file &lt;PATH&gt;</code></th><td>Load a profile from an arbitrary path. Conflicts with <code>-p</code>.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Examples</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Common invocations</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># Basic confinement</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -r /usr -r /lib -w /tmp -- ls /tmp
+
+<span class="c"># Interactive shell</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -i -r /usr -r /lib -r /lib64 -r /bin -r /etc -w /tmp -- /bin/sh
+
+<span class="c"># Resource limits plus a timeout</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -m 512M -P 20 -t 30 -- ./compute.sh
+
+<span class="c"># GPU: only the chosen device nodes are openable</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --gpu 0 \
+    -r /usr -r /lib -r /lib64 -r /etc -r /sys -r /proc -w /proc/self/task \
+    -- python3 train.py
+
+<span class="c"># Clean environment with one variable set</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --clean-env --env CC=gcc -r /usr -r /lib -w /tmp -- make
+
+<span class="c"># Chroot with a per-sandbox mount, no root and no bind mount</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --chroot ./rootfs --fs-mount /work:/tmp/sandbox/work -- /bin/sh
+
+<span class="c"># A local Docker image as the rootfs</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --image python:3.12-slim -- python3 -c <span class="s">'print(1)'</span>
+
+<span class="c"># Nested: confine sandlock's own supervisor</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --no-supervisor \
+    -r /proc -r /usr -r /lib -r /lib64 -r /bin -r /etc -w /tmp -- \
+    <span class="k">sandlock run</span> -r /usr -w /tmp -- untrusted-command</code></pre>
+</div>
+
+<h2>Managing running sandboxes</h2>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">ps, inspect, kill</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock ps</span>
+<span class="o">NAME                                  PID        UPTIME  CMD</span>
+<span class="o">api.local                           12345            5m  python3 server.py</span>
+<span class="o">web.local                           12346            3m  python3 server.py</span>
+
+<span class="p">$</span> <span class="k">sandlock inspect</span> api.local --toml | head -10
+<span class="o">[config]</span>
+<span class="o">http_inject_ca = []</span>
+<span class="o"></span>
+<span class="o">[determinism]</span>
+<span class="o">...</span>
+
+<span class="p">$</span> <span class="k">sandlock kill</span> web.local
+<span class="o">Killed sandbox 'web.local' (PID 12346)</span></code></pre>
+</div>
+
+<p>Sandboxes appear here only when their control socket is enabled, which is the default. A sandbox built with the control socket disabled creates no runtime directory, pid file, or socket, and is invisible to both commands.</p>
+
+<h2>sandlock check</h2>
+
+<p>Reports the running kernel's Landlock ABI and each protection's availability. Run it on a new host before deploying, since Sandlock's strict default refuses to start when a protection it expects is missing.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Check the host</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock check</span></code></pre>
+</div>
+
+<h2>sandlock learn</h2>
+
+<p>Runs a workload under observation and emits a TOML profile of the paths, connections, and resource peaks it actually used. Covered in full on <a href="/docs/profiles.html">Profiles and learn</a>.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Generate a profile from a real run</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock learn</span> --collapse -o profile.toml -- python3 build.py
+<span class="p">$</span> <span class="k">sandlock run</span> -p profile.toml -- python3 build.py</code></pre>
+</div>
