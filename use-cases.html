@@ -454,32 +454,61 @@ sb.run_with_handlers(
     <div class="section-container">
         <div class="usecase-grid">
             <div class="usecase-body">
-                <h2>Hardened Workloads on Kubernetes</h2>
-                <p>If your workloads already ship as OCI images, you do not have to rewrite anything to get Sandlock's confinement. <code class="inline">sandlock-oci</code> implements the OCI Runtime Specification command interface, so containerd, CRI-O, and the kubelet can drive it as a drop-in low-level runtime in place of <code class="inline">runc</code>.</p>
-                <p>The difference is what happens underneath. Where <code class="inline">runc</code> builds a container from namespaces, cgroups, and <code class="inline">pivot_root</code>, <strong><code class="inline">sandlock-oci</code> produces a namespace-less container confined by Landlock and seccomp</strong>, running unprivileged. The OCI spec is translated by intent: memory and PID limits become resource caps, bind mounts become filesystem mappings, and <code class="inline">linux.namespaces</code> is ignored by design.</p>
+                <h2>More Pods per Node on Kubernetes</h2>
+                <p>A container charges you before your workload runs a single instruction: namespaces to construct, cgroups to wire, a privileged runtime to mediate it. That cost is per pod and you pay it on every start, which is why short-lived pods are expensive and dense nodes are hard.</p>
+                <p><code class="inline">sandlock-oci</code> implements the same OCI runtime interface, so containerd, CRI-O, and the kubelet drive it in place of <code class="inline">runc</code> and your existing images need no changes. What it produces underneath is different: <strong>a namespace-less, cgroup-less container confined by Landlock and seccomp, running unprivileged</strong>. There is nothing per-pod for the kernel to construct and tear down, so a pod costs roughly what the process inside it costs.</p>
 
                 <div class="usecase-points">
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Drop-in.</strong> Accepts the runc flags containerd and CRI-O pass, including the ones that do not apply.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Checkpoint and restore</strong> a running sandbox to and from an image directory.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>OCI 1.0.x, 1.1.x, and 1.2.x</strong> bundles; anything else is rejected at create rather than mis-mapped.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>About 5 ms to start, against roughly 200 ms for a container.</strong> Short-lived pods stop being dominated by the runtime.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>97% of bare-metal throughput</strong> on the Redis benchmark, where the same workload under Docker held 63%. The node spends its cycles on the workload.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>No namespaces, no cgroups, no privileged daemon.</strong> Confinement is a ruleset the kernel evaluates, not an environment it assembles.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Checkpoint and restore</strong> a running sandbox to an image directory, so an idle pod can give its memory back and return where there is room.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Drop-in.</strong> Accepts the runc flags containerd and CRI-O pass, and supports OCI bundle versions 1.0.x, 1.1.x, and 1.2.x. Anything else is rejected at create rather than mis-mapped.</span></div>
+                </div>
+
+                <div class="who">
+                    <span class="mono-label">What you give up</span>
+                    <p>The parts of a container that <em>are</em> namespaces: a pod-private PID space and network stack. <code class="inline">linux.namespaces</code> is ignored by design. If a workload depends on those specifically rather than on the isolation they happen to provide, keep it on <code class="inline">runc</code>.</p>
                 </div>
             </div>
 
             <div class="usecase-aside">
                 <div class="code-block">
                     <div class="code-block-header">
-                        <span class="code-block-title">Drive a bundle directly</span>
+                        <span class="code-block-title">Wire it in as a runtime class</span>
                         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
                     </div>
-<pre><code><span class="p">$</span> <span class="k">sandlock-oci</span> create mycontainer -b /path/to/bundle
-<span class="p">$</span> <span class="k">sandlock-oci</span> start  mycontainer
-<span class="p">$</span> <span class="k">sandlock-oci</span> state  mycontainer
-<span class="p">$</span> <span class="k">sandlock-oci</span> exec   mycontainer sh -c <span class="s">'echo hello'</span>
-<span class="p">$</span> <span class="k">sandlock-oci</span> kill   mycontainer SIGTERM
-<span class="p">$</span> <span class="k">sandlock-oci</span> delete mycontainer
+<pre><code><span class="c"># containerd: register sandlock-oci as a runtime handler</span>
+[plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock]
+  runtime_type = <span class="s">"io.containerd.runc.v2"</span>
+  [plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock.options]
+    BinaryName = <span class="s">"/usr/local/bin/sandlock-oci"</span>
 
-<span class="c"># confirm the host kernel supports Landlock</span>
-<span class="p">$</span> <span class="k">sandlock-oci</span> check</code></pre>
+<span class="c"># then select it per workload, image unchanged</span>
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: sandlock
+handler: sandlock
+---
+apiVersion: v1
+kind: Pod
+spec:
+  runtimeClassName: sandlock
+  containers:
+    - name: job
+      image: python:3.12-slim</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Or drive a bundle directly</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock-oci</span> check   <span class="c"># host kernel support</span>
+<span class="p">$</span> <span class="k">sandlock-oci</span> create mycontainer -b /path/to/bundle
+<span class="p">$</span> <span class="k">sandlock-oci</span> start  mycontainer
+<span class="p">$</span> <span class="k">sandlock-oci</span> delete mycontainer</code></pre>
                 </div>
             </div>
         </div>
