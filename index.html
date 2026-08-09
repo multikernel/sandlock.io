@@ -353,24 +353,23 @@ permalink: /
             <div class="value-visual" style="align-items: flex-start;">
                 <div class="code-block" style="width: 100%; margin: 0;">
                     <div class="code-block-header">
-                        <span class="code-block-title">Audit every open, from your own crate</span>
+                        <span class="code-block-title">Audit every open, from your own code</span>
                         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
                     </div>
-<pre><code><span class="k">use</span> sandlock_core::{HandlerCtx, Sandbox};
-<span class="k">use</span> sandlock_core::seccomp::notif::NotifAction;
+<pre><code><span class="k">import</span> sandlock
+<span class="k">from</span> sandlock.handler <span class="k">import</span> Handler, NotifAction
 
-<span class="k">let</span> audit = <span class="k">move</span> |cx: &amp;HandlerCtx| {
-    <span class="k">let</span> pid = cx.notif.pid;
-    <span class="k">async move</span> {
-        <span class="k">eprintln!</span>(<span class="s">"openat from pid {pid}"</span>);
-        <span class="c">// Continue = fall through to the kernel.</span>
-        NotifAction::Continue
-    }
-};
+<span class="k">class</span> Audit(Handler):
+    <span class="k">def</span> handle(<span class="k">self</span>, ctx):
+        <span class="c"># Runs in the supervisor, before the kernel acts.</span>
+        <span class="k">print</span>(<span class="s">f"open {ctx.read_path()} from pid {ctx.pid}"</span>)
+        <span class="k">return</span> NotifAction.continue_()   <span class="c"># fall through</span>
 
-<span class="k">let</span> result = sandbox
-    .run_with_handlers(&amp;cmd, [(libc::SYS_openat, audit)])
-    .<span class="k">await</span>?;</code></pre>
+sb = sandlock.Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>])
+sb.run_with_handlers(
+    cmd=[<span class="s">"python3"</span>, <span class="s">"task.py"</span>],
+    handlers=[(<span class="s">"openat"</span>, Audit())],
+)</code></pre>
                 </div>
             </div>
         </div>
