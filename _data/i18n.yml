@@ -8,7 +8,7 @@ en:
     overview: How It Works
     overview_sub: Landlock, seccomp, and the supervisor
     use_cases: Use Cases
-    use_cases_sub: AI agents, CI, multi-tenant code execution
+    use_cases_sub: AI agents, CI, per-request execution, FaaS
     comparison: Comparison
     comparison_sub: Sandlock vs containers, microVMs, gVisor
     security: Security Model

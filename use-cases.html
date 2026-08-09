@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "Use Cases"
-description: "How teams use Sandlock: AI agent tool execution, untrusted CI builds, multi-tenant code execution, data pipelines with split trust, and reproducible builds."
+description: "How teams use Sandlock: AI agent tool execution, untrusted CI builds, per-request code execution, function-as-a-service, prompt injection defense, and Kubernetes."
 permalink: /use-cases.html
 ---
 
@@ -227,31 +227,31 @@ permalink: /use-cases.html
     </div>
 </section>
 
-<section class="usecase" id="multi-tenant">
+<section class="usecase" id="per-request">
     <div class="section-container">
         <div class="usecase-grid">
             <div class="usecase-body">
-                <h2>Multi-Tenant Code Execution</h2>
-                <p>Notebook backends, code interpreters, autograders, and evaluation harnesses all run one untrusted snippet per request, thousands of times a day. Container startup dominates the request; a pool of warm containers trades that latency for cross-request contamination.</p>
-                <p>A Sandlock sandbox starts in about 5 ms, so a fresh one per request is affordable. <strong>Port virtualization gives every sandbox its own port space</strong>, so a hundred tenants can each bind port 8080, and <code class="inline">/proc/net/tcp</code> inside a sandbox shows only that sandbox's own sockets.</p>
+                <h2>Per-Request Code Execution</h2>
+                <p>Notebook backends, code interpreters, autograders, and evaluation harnesses run one untrusted snippet per request, thousands of times a day. Container startup dominates the request, and a pool of warm containers trades that latency for state leaking between requests.</p>
+                <p>A Sandlock sandbox starts in about 5 ms, so <strong>a fresh one per request is affordable</strong> and nothing carries over. Port virtualization gives each sandbox its own port space, so a hundred of them can bind 8080 without colliding, and <code class="inline">/proc/net/tcp</code> inside a sandbox shows only its own sockets.</p>
 
                 <div class="usecase-points">
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>Fresh sandbox per request</strong>, with no pool and no reuse.</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>Named sandboxes</strong> get a stable virtual hostname, so a reverse proxy can route by name to the real port.</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>Fleet introspection.</strong> <code class="inline">sandlock ps</code> lists what is running; <code class="inline">sandlock inspect</code> prints a live sandbox's effective policy as JSON or TOML.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Virtualized <code class="inline">/proc</code>.</strong> Set the visible CPU count and memory size a tenant sees.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Virtualized <code class="inline">/proc</code>.</strong> Set the CPU count and memory size a workload believes it has.</span></div>
                 </div>
 
                 <div class="who">
-                    <span class="mono-label">At scale</span>
-                    <p>COW fork initializes expensive state once, then forks clones that share memory copy-on-write: 1000 clones in about 530 ms, roughly 1,900 forks per second. Each clone inherits the full confinement.</p>
+                    <span class="mono-label">Know the boundary</span>
+                    <p>Sandboxes on one host share a kernel. That is a real boundary against a snippet reading another's files or reaching its network, and it is <strong>not</strong> a boundary against a kernel exploit. For mutually hostile tenants who each get a stronger guarantee, you want a separate kernel: a microVM, or <a href="https://multikernel.io" target="_blank" rel="noopener noreferrer">Multikernel</a>. See the <a href="/security.html">security model</a> for exactly what is in scope.</p>
                 </div>
             </div>
 
             <div class="usecase-aside">
                 <div class="code-block">
                     <div class="code-block-header">
-                        <span class="code-block-title">Two tenants, same port, no collision</span>
+                        <span class="code-block-title">Two servers, same port, no collision</span>
                         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
                     </div>
 <pre><code><span class="p">$</span> <span class="k">sandlock run</span> --name api.local --port-remap \
@@ -275,41 +275,122 @@ permalink: /use-cases.html
     </div>
 </section>
 
-<section class="usecase" id="data-pipelines">
+<section class="usecase" id="faas">
     <div class="section-container">
         <div class="usecase-grid">
             <div class="usecase-body">
-                <h2>Split-Trust Data Pipelines</h2>
-                <p>Some stages of a pipeline need the sensitive data; the stages that transform it do not. Normally that separation is a convention enforced by code review. Sandlock makes it a property of the process.</p>
-                <p>Chain stages with the <code class="inline">|</code> operator, giving each stage its own independent sandbox configuration. Data flows between them through kernel pipes, so <strong>the downstream stage sees the bytes but never gains the ability to open the source</strong>.</p>
+                <h2>Function as a Service</h2>
+                <p>A function platform takes an event, runs someone else's code against it, returns a response, and releases the resources. Two properties of that make it hard: the code is not yours, and the request should pay for nothing beyond the time it ran.</p>
+                <p>Sandlock answers the first with a policy per function, applied by the kernel before the handler executes. It answers the second with a <strong>5 ms start, which is cheap enough to give every invocation its own sandbox</strong>. Nothing is pooled, so nothing is held between requests, and a function that is never called costs nothing.</p>
+                <p>Concurrency is the same statement repeated. Ten simultaneous events are ten sandboxes, each with the calling function's policy and none of them able to see the others.</p>
 
                 <div class="usecase-points">
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Per-stage policy.</strong> The reader has the data path; the processor does not.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>eXecute-Only Agents (XOA).</strong> A planner with no data access generates code; an executor with data access but no network runs it.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Map-reduce.</strong> Fork COW clones for the map phase, then pipe their stdout into a reducer running in a different sandbox with a different policy.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Stateless by construction.</strong> A fresh sandbox has no filesystem, memory, or process state from the last invocation, so isolation between requests is not a matter of resetting anything.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Policy per function.</strong> An image resizer reaches a scratch directory and no network; a notifier reaches one endpoint and no data. Neither can be talked into the other's capability.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Bounded without a supervisor.</strong> Memory, process count, CPU share, and a wall-clock timeout are part of the policy, so a runaway handler is stopped by the kernel rather than by a watchdog you wrote.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>No warm pool.</strong> Idle functions hold nothing, so density is decided by concurrent invocations rather than by how many functions exist.</span></div>
+                </div>
+
+                <div class="who">
+                    <span class="mono-label">Beyond one host</span>
+                    <p>The <a href="/enterprise.html#http-api">Sandbox HTTP API</a> turns an invocation into a remote call, and the <a href="/enterprise.html#scheduler">Sandbox Scheduler</a> places them across a fleet. For fan-out within one invocation, such as best-of-N sampling, COW fork initializes once and forks a batch of clones sharing those pages.</p>
                 </div>
             </div>
 
             <div class="usecase-aside">
                 <div class="code-block">
                     <div class="code-block-header">
-                        <span class="code-block-title">Python: reader has data, processor does not</span>
+                        <span class="code-block-title">Event in, response out, sandbox gone</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="k">from</span> concurrent.futures <span class="k">import</span> ThreadPoolExecutor
+<span class="k">from</span> sandlock <span class="k">import</span> Sandbox, StdioMode
+
+<span class="c"># What each deployed function is allowed to do. The resizer</span>
+<span class="c"># gets scratch space and no network; the notifier gets one</span>
+<span class="c"># endpoint and no data.</span>
+FUNCTIONS = {
+    <span class="s">"resize"</span>: <span class="k">dict</span>(
+        fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>, <span class="s">"/srv/fn/resize"</span>],
+        fs_writable=[<span class="s">"/work"</span>], max_memory=<span class="s">"256M"</span>, max_processes=4,
+    ),
+    <span class="s">"notify"</span>: <span class="k">dict</span>(
+        fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>, <span class="s">"/srv/fn/notify"</span>],
+        http_allow=[<span class="s">"POST api.internal/v1/notify"</span>], max_memory=<span class="s">"128M"</span>,
+    ),
+}
+
+<span class="k">def</span> invoke(name: <span class="k">str</span>, event: <span class="k">bytes</span>) -&gt; <span class="k">bytes</span>:
+    <span class="s">"""One invocation: a sandbox of its own, torn down on return."""</span>
+    proc = Sandbox(**FUNCTIONS[name]).popen(
+        [<span class="s">"python3"</span>, <span class="s">f"/srv/fn/{name}/handler.py"</span>],
+        stdin=StdioMode.PIPED, stdout=StdioMode.PIPED,
+    )
+    proc.stdin.write(event)
+    proc.stdin.close()                  <span class="c"># EOF, so the handler runs</span>
+    response = proc.stdout.read()       <span class="c"># drain before wait</span>
+    <span class="k">if not</span> proc.wait(timeout=30).success:
+        <span class="k">raise</span> RuntimeError(<span class="s">f"{name} failed"</span>)
+    <span class="k">return</span> response
+
+<span class="c"># Concurrent events are concurrent sandboxes, one policy each.</span>
+<span class="k">with</span> ThreadPoolExecutor() <span class="k">as</span> pool:
+    responses = <span class="k">list</span>(pool.map(<span class="k">lambda</span> e: invoke(<span class="s">"resize"</span>, e), events))</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="usecase" id="prompt-injection">
+    <div class="section-container">
+        <div class="usecase-grid">
+            <div class="usecase-body">
+                <h2>Prompt Injection Defense</h2>
+                <p>An agent that reads a web page, a document, or a tool result is reading text an attacker may have written. No amount of prompt engineering reliably stops a model from being talked into something, and the instruction that convinces it will not look like an attack.</p>
+                <p>So stop trying to keep the model from being convinced, and make being convinced worthless. <strong>Split the agent so that whatever reads untrusted text holds no capability, and whatever holds capability never reads untrusted text.</strong> Each stage gets its own policy, data flows between them through kernel pipes, and the downstream stage sees the bytes without gaining the upstream stage's access.</p>
+
+                <div class="usecase-points">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>The reader has nothing to give away.</strong> No network, no credentials, no data paths, so an instruction hidden in the page has nothing to act on.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>The actor never sees the text.</strong> It receives a structured result, so there is no prose in its input to carry an instruction.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Exfiltration fails at the syscall.</strong> "Send this to my server" hits a <code class="inline">connect()</code> the policy never allowed, whatever the model decided.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>"Print your API key" returns nothing.</strong> With <a href="/docs/http-acl.html#credential-injection">credential injection</a> the secret lives in the supervisor and is attached after the ACL check, so it was never in the agent's memory to leak.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>eXecute-Only Agents.</strong> The same shape at its limit: a planner with no data access writes the code, an executor with data access but no network runs it.</span></div>
+                </div>
+
+                <div class="who">
+                    <span class="mono-label">What this does not do</span>
+                    <p>It does not stop the model producing a wrong or hostile answer. A summary can still be poisoned, and a human reading it can still be misled. What the policy bounds is what the agent can <em>do</em>, which is the part an attacker actually wants.</p>
+                </div>
+            </div>
+
+            <div class="usecase-aside">
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">The reader is powerless, the actor is blind</span>
                         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
                     </div>
 <pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox
 
-trusted = Sandbox(
-    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>,
-                 <span class="s">"/etc"</span>, <span class="s">"/opt/data"</span>],
-)
-restricted = Sandbox(
-    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>],
+<span class="c"># Reads the untrusted page and emits structured JSON.</span>
+<span class="c"># No network and no secrets, so an instruction buried in</span>
+<span class="c"># that page has nothing to reach for.</span>
+reader = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>,
+                 <span class="s">"/work/fetched"</span>],
+    max_memory=<span class="s">"512M"</span>,
 )
 
-<span class="c"># restricted can never open /opt/data itself</span>
+<span class="c"># Holds the one endpoint that may be called. It sees the</span>
+<span class="c"># reader's JSON, never the prose it came from.</span>
+actor = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>],
+    http_allow=[<span class="s">"POST api.internal/v1/tickets"</span>],
+)
+
 result = (
-    trusted.cmd([<span class="s">"cat"</span>, <span class="s">"/opt/data/secret.csv"</span>])
-    | restricted.cmd([<span class="s">"tr"</span>, <span class="s">"a-z"</span>, <span class="s">"A-Z"</span>])
+    reader.cmd([<span class="s">"python3"</span>, <span class="s">"extract.py"</span>, <span class="s">"page.html"</span>])
+    | actor.cmd([<span class="s">"python3"</span>, <span class="s">"file_ticket.py"</span>])
 ).run()</code></pre>
                 </div>
             </div>
