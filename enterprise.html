@@ -181,6 +181,52 @@ permalink: /enterprise.html
     color: var(--gray-600);
 }
 
+.cta-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-5);
+    margin: var(--space-12) 0 var(--space-10);
+    text-align: left;
+}
+
+.cta-step {
+    padding-top: var(--space-4);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cta-step .n {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--accent-500);
+    margin-bottom: var(--space-3);
+}
+
+.cta-step h3 {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: white;
+    margin-bottom: var(--space-2);
+    letter-spacing: -0.01em;
+}
+
+.cta-band .cta-step p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
+}
+
+@media (max-width: 760px) {
+    .cta-steps {
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+        margin: var(--space-10) 0 var(--space-8);
+    }
+}
+
 @media (max-width: 900px) {
     .layer-row {
         grid-template-columns: 1fr;
@@ -388,13 +434,33 @@ permalink: /enterprise.html
     </div>
 </section>
 
-    <div class="cta-band-inner">
-        <h2>Talk to Us About the Fleet</h2>
-        <p>Bring the shape of your workload: sessions, concurrency, and how long they idle. We will tell you honestly whether the Sandbox HTTP API and Sandbox Scheduler are worth it, or whether the open-source project already covers you.</p>
+<section class="cta-band">
+    <div class="cta-band-inner" style="max-width: 940px;">
+        <h2>Take It Beyond One Machine</h2>
+        <p>The open-source core will carry you a long way on a single host. When sandboxes become a fleet, with many tenants, many machines, and a memory bill dominated by sessions that are doing nothing, the API and the scheduler are what turn that into infrastructure you can operate.</p>
+
+        <div class="cta-steps">
+            <div class="cta-step">
+                <span class="n">01</span>
+                <h3>A technical call</h3>
+                <p>Forty-five minutes with an engineer rather than a salesperson. Bring the workload.</p>
+            </div>
+            <div class="cta-step">
+                <span class="n">02</span>
+                <h3>Sized against your numbers</h3>
+                <p>Sessions, concurrency, and idle profile, measured rather than modelled.</p>
+            </div>
+            <div class="cta-step">
+                <span class="n">03</span>
+                <h3>A pilot on your infrastructure</h3>
+                <p>Running against real traffic before anything is signed.</p>
+            </div>
+        </div>
+
         <div class="button-group">
             <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
                 <i data-lucide="calendar"></i>
-                Schedule a Call
+                Book a Technical Call
             </a>
             <a href="mailto:contact@multikernel.io" class="btn btn-secondary">
                 <i data-lucide="mail"></i>
