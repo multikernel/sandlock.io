@@ -459,6 +459,7 @@ sb.run_with_handlers(
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>About 5 ms to start</strong>, against roughly 200 ms for a container.</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>97% of bare-metal throughput</strong> on the Redis benchmark, where Docker held 63%.</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>No namespaces, no cgroups, no privileged daemon.</strong></span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Policy rides on pod annotations.</strong> Network and HTTP rules the OCI spec cannot carry travel as <code class="inline">io.sandlock.*</code> keys.</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>Checkpoint and restore</strong>, so an idle pod can give its memory back.</span></div>
                 </div>
 
@@ -471,40 +472,45 @@ sb.run_with_handlers(
             <div class="usecase-aside">
                 <div class="code-block">
                     <div class="code-block-header">
-                        <span class="code-block-title">Wire it in as a runtime class</span>
+                        <span class="code-block-title">Register the runtime, once</span>
                         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
                     </div>
-<pre><code><span class="c"># containerd: register sandlock-oci as a runtime handler</span>
+<pre><code><span class="c"># containerd. pod_annotations is what forwards the</span>
+<span class="c"># io.sandlock.* keys through to the runtime.</span>
 [plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock]
-  runtime_type = <span class="s">"io.containerd.runc.v2"</span>
+  runtime_type   = <span class="s">"io.containerd.runc.v2"</span>
+  pod_annotations = [<span class="s">"io.sandlock.*"</span>]
   [plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock.options]
     BinaryName = <span class="s">"/usr/local/bin/sandlock-oci"</span>
 
-<span class="c"># then select it per workload, image unchanged</span>
+<span class="c"># ---</span>
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
   name: sandlock
-handler: sandlock
----
-apiVersion: v1
-kind: Pod
-spec:
-  runtimeClassName: sandlock
-  containers:
-    - name: job
-      image: python:3.12-slim</code></pre>
+handler: sandlock</code></pre>
                 </div>
 
                 <div class="code-block">
                     <div class="code-block-header">
-                        <span class="code-block-title">Or drive a bundle directly</span>
+                        <span class="code-block-title">Then policy travels in annotations</span>
                         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
                     </div>
-<pre><code><span class="p">$</span> <span class="k">sandlock-oci</span> check   <span class="c"># host kernel support</span>
-<span class="p">$</span> <span class="k">sandlock-oci</span> create mycontainer -b /path/to/bundle
-<span class="p">$</span> <span class="k">sandlock-oci</span> start  mycontainer
-<span class="p">$</span> <span class="k">sandlock-oci</span> delete mycontainer</code></pre>
+<pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: agent
+  annotations:
+    <span class="c"># ';' separates entries, because ',' is already</span>
+    <span class="c"># meaningful inside a network spec.</span>
+    io.sandlock.network.allow: <span class="s">"api.internal:443;10.0.0.0/8:5432"</span>
+    io.sandlock.http.allow: <span class="s">"POST api.internal/v1/*"</span>
+    io.sandlock.config.http_inject_ca: <span class="s">"/etc/ssl/certs/ca-certificates.crt"</span>
+spec:
+  runtimeClassName: sandlock
+  containers:
+    - name: agent
+      image: python:3.12-slim   <span class="c"># unchanged</span></code></pre>
                 </div>
             </div>
         </div>

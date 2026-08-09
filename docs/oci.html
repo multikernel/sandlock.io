@@ -101,6 +101,88 @@ lede: "sandlock-oci is a thin OCI-compatible front end over sandlock-core. Where
 
 <p>Mount types with no safe namespace-less equivalent, namely <code class="inline">devpts</code>, <code class="inline">mqueue</code>, <code class="inline">cgroup</code>, and <code class="inline">cgroup2</code>, are skipped. Port binding is remapped so in-container servers can <code class="inline">bind()</code> without colliding on host ports.</p>
 
+<h2>Sandlock policy in annotations</h2>
+
+<p>The OCI runtime specification has no field for an outbound allowlist or a transparent proxy, so the parts of a Sandlock policy it cannot express travel as annotations under the <code class="inline">io.sandlock.</code> prefix.</p>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Entries are separated by <code class="inline">;</code>, not <code class="inline">,</code>.</strong> A comma is already meaningful inside a network spec, where <code class="inline">host:80,443</code> is one rule covering two ports.</p>
+    </div>
+</div>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Annotation</th>
+                <th scope="col">Maps to</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>io.sandlock.network.allow</code></th><td><code>net_allow</code></td></tr>
+            <tr><th scope="row"><code>io.sandlock.network.deny</code></th><td><code>net_deny</code></td></tr>
+            <tr><th scope="row"><code>io.sandlock.network.allow_bind</code></th><td><code>net_allow_bind</code></td></tr>
+            <tr><th scope="row"><code>io.sandlock.network.deny_bind</code></th><td><code>net_deny_bind</code></td></tr>
+            <tr><th scope="row"><code>io.sandlock.network.port_remap</code></th><td><code>port_remap</code>. <strong>On by default here</strong>, unlike everywhere else; see below. Set <code>"false"</code> to opt out.</td></tr>
+            <tr><th scope="row"><code>io.sandlock.http.allow</code></th><td><code>http_allow</code></td></tr>
+            <tr><th scope="row"><code>io.sandlock.http.deny</code></th><td><code>http_deny</code></td></tr>
+            <tr><th scope="row"><code>io.sandlock.http.ports</code></th><td><code>http_ports</code></td></tr>
+            <tr><th scope="row"><code>io.sandlock.config.http_ca</code></th><td><code>http_ca</code>. A host-side file, resolved relative to the bundle.</td></tr>
+            <tr><th scope="row"><code>io.sandlock.config.http_key</code></th><td><code>http_key</code>. Host-side, bundle-relative.</td></tr>
+            <tr><th scope="row"><code>io.sandlock.config.http_ca_out</code></th><td><code>http_ca_out</code>. Host-side, bundle-relative.</td></tr>
+            <tr><th scope="row"><code>io.sandlock.config.http_inject_ca</code></th><td><code>http_inject_ca</code>. These are sandbox-virtual paths, passed through as written and resolved through the chroot and mounts.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<h3>Why port remapping defaults on</h3>
+
+<p>Container workloads legitimately run servers. Sandlock gates <code class="inline">bind()</code> default-deny, so without remapping an in-container server fails with <code class="inline">EACCES</code> and the container exits, which then hangs any readiness probe waiting on it. Remapped binds are emulated on the on-behalf path and succeed, taking the requested port when it is free and a fresh host port only on a conflict, so co-located sandboxes never collide.</p>
+
+<h3>On Kubernetes</h3>
+
+<p>Pod annotations only reach the runtime if the containerd handler is told to forward them. Without <code class="inline">pod_annotations</code>, the keys are silently dropped and the pod runs with no network policy at all.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">containerd</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>[plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock]
+  runtime_type    = <span class="s">"io.containerd.runc.v2"</span>
+  pod_annotations = [<span class="s">"io.sandlock.*"</span>]
+  [plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock.options]
+    BinaryName = <span class="s">"/usr/local/bin/sandlock-oci"</span></code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">A pod, image unchanged</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: sandlock
+handler: sandlock
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent
+  annotations:
+    io.sandlock.network.allow: <span class="s">"api.internal:443;10.0.0.0/8:5432"</span>
+    io.sandlock.http.allow: <span class="s">"POST api.internal/v1/*"</span>
+    io.sandlock.config.http_inject_ca: <span class="s">"/etc/ssl/certs/ca-certificates.crt"</span>
+spec:
+  runtimeClassName: sandlock
+  containers:
+    - name: agent
+      image: python:3.12-slim</code></pre>
+</div>
+
 <h2>runc compatibility</h2>
 
 <p>The CLI accepts the global and per-command flags containerd and CRI-O pass to <code class="inline">runc</code>, so it can be wired in as a drop-in replacement. Flags that do not apply to a namespace-less, cgroup-less runtime are accepted and ignored: <code class="inline">--systemd-cgroup</code>, <code class="inline">--rootless</code>, <code class="inline">--no-pivot</code>, <code class="inline">--no-new-keyring</code>, and <code class="inline">--debug</code>.</p>
