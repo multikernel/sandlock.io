@@ -134,20 +134,19 @@ permalink: /use-cases.html
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>AI Agents and Tool Execution</h2>
-                <p>An agent that can run shell commands is, by construction, an arbitrary code execution primitive driven by a model. It needs a workspace it can write to, one or two API endpoints, and nothing else. Handing it a container means handing it a container's whole worldview, including whatever credentials sit in the environment.</p>
-                <p>Sandlock inverts that. The agent gets exactly the paths and exactly the endpoints you name. <strong>The API key never enters the agent's address space at all</strong>: it lives in the supervisor, and is attached to the outbound request in the proxy after the ACL check has already passed.</p>
+                <p>An agent that runs shell commands is arbitrary code execution with a model choosing the arguments. It needs a workspace and one or two endpoints, not a container's whole worldview.</p>
+                <p>Sandlock gives it exactly the paths and endpoints you name. <strong>The API key never enters its address space</strong>: the secret stays in the supervisor and is attached in the proxy after the ACL check has passed.</p>
 
                 <div class="usecase-points">
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>HTTP-level rules</strong>, not just <code class="inline">host:443</code>. Allow one method on one path.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Zero-config HTTPS interception.</strong> Sandlock generates an ephemeral CA, keeps the private key in memory, and splices the public cert into the trust bundles you name.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Credential stripped from the child.</strong> With <code class="inline">env:VAR</code> the variable is removed from the agent's environment, so it cannot read the key back out.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Runtime policy.</strong> A callback can revoke network access or deny a path the moment the agent finishes starting up.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>GPU selection is a boundary.</strong> <code class="inline">--gpu 0</code> makes the other device nodes unopenable, not merely hidden.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>HTTP-level rules</strong>, not just <code class="inline">host:443</code>. One method, one path.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Zero-config HTTPS.</strong> An ephemeral CA, private key in memory, spliced into the trust bundles you name.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Credential stripped from the child</strong>, so a compromised agent cannot read its own key back.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>GPU selection is a boundary.</strong> <code class="inline">--gpu 0</code> makes the other device nodes unopenable.</span></div>
                 </div>
 
                 <div class="who">
                     <span class="mono-label">Also available as</span>
-                    <p>An <a href="/docs/mcp.html">MCP server</a> exposing sandboxed shell, Python, and file tools to Claude Desktop, Cursor, and any other MCP client, with a fresh sandbox per call.</p>
+                    <p>An <a href="/docs/mcp.html">MCP server</a> exposing sandboxed shell, Python, and file tools, with a fresh sandbox per call.</p>
                 </div>
             </div>
 
@@ -181,19 +180,19 @@ permalink: /use-cases.html
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>Untrusted CI Builds</h2>
-                <p>A pull request from a fork is untrusted code with a build script attached. The usual answers are a disposable VM per job, which is slow and expensive, or Docker on a shared runner, which means handing the job a socket that is equivalent to root.</p>
-                <p>Sandlock runs the build as an ordinary user with the network closed, the toolchain read-only, and the source tree copy-on-write. If the build succeeds the writes are committed; if it fails they are discarded. <strong><code class="inline">--dry-run</code> goes further and shows you the exact set of files a build would touch without letting any of it land.</strong></p>
+                <p>A pull request from a fork is untrusted code with a build script attached. A disposable VM per job is slow and expensive; Docker on a shared runner hands that job a socket equivalent to root.</p>
+                <p>Sandlock runs the build as an ordinary user with the network closed, the toolchain read-only, and the source tree copy-on-write. <strong>Writes commit on success and vanish on failure</strong>, and <code class="inline">--dry-run</code> shows what a build would touch without letting any of it land.</p>
 
                 <div class="usecase-points">
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>No root, no daemon, no Docker socket</strong> on the runner.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>~5 ms of startup overhead</strong>, so per-step confinement is practical.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Reproducible builds.</strong> Freeze the clock, seed the PRNG, sort directory reads, and disable ASLR to remove the usual sources of nondeterminism.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Generated policies.</strong> <code class="inline">sandlock learn</code> observes a real build and emits a TOML profile of exactly what it touched.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>About 5 ms of overhead</strong>, so confining each step is practical.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Reproducible builds.</strong> Freeze the clock, seed the PRNG, sort directory reads, disable ASLR.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Generated policies.</strong> <code class="inline">sandlock learn</code> watches a real build and writes the profile.</span></div>
                 </div>
 
                 <div class="who">
                     <span class="mono-label">Nesting</span>
-                    <p>A sandboxed job can itself run Sandlock. The inner invocation uses <code class="inline">--no-supervisor</code>, since the kernel permits only one seccomp notification listener per task.</p>
+                    <p>A sandboxed job can run Sandlock itself, using <code class="inline">--no-supervisor</code> for the inner one.</p>
                 </div>
             </div>
 
@@ -232,19 +231,19 @@ permalink: /use-cases.html
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>Per-Request Code Execution</h2>
-                <p>Notebook backends, code interpreters, autograders, and evaluation harnesses run one untrusted snippet per request, thousands of times a day. Container startup dominates the request, and a pool of warm containers trades that latency for state leaking between requests.</p>
-                <p>A Sandlock sandbox starts in about 5 ms, so <strong>a fresh one per request is affordable</strong> and nothing carries over. Port virtualization gives each sandbox its own port space, so a hundred of them can bind 8080 without colliding, and <code class="inline">/proc/net/tcp</code> inside a sandbox shows only its own sockets.</p>
+                <p>Notebook backends, interpreters, and autograders run one untrusted snippet per request, thousands of times a day. Container startup dominates the request, and a warm pool trades that latency for state leaking between callers.</p>
+                <p>At about 5 ms, <strong>a fresh sandbox per request is affordable</strong> and nothing carries over. Port virtualization gives each its own port space, so a hundred can bind 8080 without colliding.</p>
 
                 <div class="usecase-points">
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>Fresh sandbox per request</strong>, with no pool and no reuse.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Named sandboxes</strong> get a stable virtual hostname, so a reverse proxy can route by name to the real port.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Fleet introspection.</strong> <code class="inline">sandlock ps</code> lists what is running; <code class="inline">sandlock inspect</code> prints a live sandbox's effective policy as JSON or TOML.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Virtualized <code class="inline">/proc</code>.</strong> Set the CPU count and memory size a workload believes it has.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Named sandboxes</strong> get a stable virtual hostname for a reverse proxy to route by.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Fleet introspection.</strong> <code class="inline">sandlock ps</code> and <code class="inline">sandlock inspect</code> show what is running and under which policy.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Virtualized <code class="inline">/proc</code>.</strong> Set the CPU count and memory a workload believes it has.</span></div>
                 </div>
 
                 <div class="who">
                     <span class="mono-label">Know the boundary</span>
-                    <p>Sandboxes on one host share a kernel. That is a real boundary against a snippet reading another's files or reaching its network, and it is <strong>not</strong> a boundary against a kernel exploit. For mutually hostile tenants who each get a stronger guarantee, you want a separate kernel: a microVM, or <a href="https://multikernel.io" target="_blank" rel="noopener noreferrer">Multikernel</a>. See the <a href="/security.html">security model</a> for exactly what is in scope.</p>
+                    <p>Sandboxes on one host share a kernel. That stops a snippet reading another's files; it does not stop a kernel exploit. For mutually hostile tenants you want a separate kernel. See the <a href="/security.html">security model</a>.</p>
                 </div>
             </div>
 
@@ -280,20 +279,19 @@ permalink: /use-cases.html
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>Function as a Service</h2>
-                <p>A function platform takes an event, runs someone else's code against it, returns a response, and releases the resources. Two properties of that make it hard: the code is not yours, and the request should pay for nothing beyond the time it ran.</p>
-                <p>Sandlock answers the first with a policy per function, applied by the kernel before the handler executes. It answers the second with a <strong>5 ms start, which is cheap enough to give every invocation its own sandbox</strong>. Nothing is pooled, so nothing is held between requests, and a function that is never called costs nothing.</p>
-                <p>Concurrency is the same statement repeated. Ten simultaneous events are ten sandboxes, each with the calling function's policy and none of them able to see the others.</p>
+                <p>A function platform takes an event, runs someone else's code against it, returns a response, and releases the resources. The code is not yours, and the request should pay for nothing beyond the time it ran.</p>
+                <p>A policy per function answers the first. A 5 ms start answers the second: <strong>every invocation gets its own sandbox</strong>, so there is no pool to keep warm, nothing held between requests, and ten concurrent events are ten sandboxes.</p>
 
                 <div class="usecase-points">
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Stateless by construction.</strong> A fresh sandbox has no filesystem, memory, or process state from the last invocation, so isolation between requests is not a matter of resetting anything.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Policy per function.</strong> An image resizer reaches a scratch directory and no network; a notifier reaches one endpoint and no data. Neither can be talked into the other's capability.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Bounded without a supervisor.</strong> Memory, process count, CPU share, and a wall-clock timeout are part of the policy, so a runaway handler is stopped by the kernel rather than by a watchdog you wrote.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>No warm pool.</strong> Idle functions hold nothing, so density is decided by concurrent invocations rather than by how many functions exist.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Stateless by construction.</strong> A fresh sandbox carries nothing from the last invocation.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Policy per function.</strong> A resizer gets scratch space and no network; a notifier gets one endpoint and no data.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Bounded without a supervisor.</strong> Memory, processes, CPU share, and a timeout are part of the policy.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>No warm pool</strong>, so idle functions cost nothing.</span></div>
                 </div>
 
                 <div class="who">
                     <span class="mono-label">Beyond one host</span>
-                    <p>The <a href="/enterprise.html#http-api">Sandbox HTTP API</a> turns an invocation into a remote call, and the <a href="/enterprise.html#scheduler">Sandbox Scheduler</a> places them across a fleet. For fan-out within one invocation, such as best-of-N sampling, COW fork initializes once and forks a batch of clones sharing those pages.</p>
+                    <p>The <a href="/enterprise.html#http-api">Sandbox HTTP API</a> makes invocations remote calls, and the <a href="/enterprise.html#scheduler">Sandbox Scheduler</a> spreads them across a fleet.</p>
                 </div>
             </div>
 
@@ -347,20 +345,19 @@ FUNCTIONS = {
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>Prompt Injection Defense</h2>
-                <p>An agent that reads a web page, a document, or a tool result is reading text an attacker may have written. No amount of prompt engineering reliably stops a model from being talked into something, and the instruction that convinces it will not look like an attack.</p>
-                <p>So stop trying to keep the model from being convinced, and make being convinced worthless. <strong>Split the agent so that whatever reads untrusted text holds no capability, and whatever holds capability never reads untrusted text.</strong> Each stage gets its own policy, data flows between them through kernel pipes, and the downstream stage sees the bytes without gaining the upstream stage's access.</p>
+                <p>An agent reading a web page, a document, or a tool result is reading text an attacker may have written, and no amount of prompt engineering reliably stops a model being talked into something.</p>
+                <p>So stop trying, and make being convinced worthless. <strong>Split the agent so whatever reads untrusted text holds no capability, and whatever holds capability never reads untrusted text.</strong> Each stage keeps its own policy and data passes between them through kernel pipes.</p>
 
                 <div class="usecase-points">
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>The reader has nothing to give away.</strong> No network, no credentials, no data paths, so an instruction hidden in the page has nothing to act on.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>The actor never sees the text.</strong> It receives a structured result, so there is no prose in its input to carry an instruction.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Exfiltration fails at the syscall.</strong> "Send this to my server" hits a <code class="inline">connect()</code> the policy never allowed, whatever the model decided.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>"Print your API key" returns nothing.</strong> With <a href="/docs/http-acl.html#credential-injection">credential injection</a> the secret lives in the supervisor and is attached after the ACL check, so it was never in the agent's memory to leak.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>eXecute-Only Agents.</strong> The same shape at its limit: a planner with no data access writes the code, an executor with data access but no network runs it.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>The reader has nothing to give away.</strong> No network, no credentials, no data paths.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>The actor never sees the text</strong>, only the structured result, so nothing in its input can carry an instruction.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Exfiltration fails at the syscall.</strong> "Send this to my server" hits a <code class="inline">connect()</code> the policy never allowed.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>"Print your API key" returns nothing</strong>, because <a href="/docs/http-acl.html#credential-injection">credential injection</a> kept it out of the agent's memory.</span></div>
                 </div>
 
                 <div class="who">
                     <span class="mono-label">What this does not do</span>
-                    <p>It does not stop the model producing a wrong or hostile answer. A summary can still be poisoned, and a human reading it can still be misled. What the policy bounds is what the agent can <em>do</em>, which is the part an attacker actually wants.</p>
+                    <p>It does not stop the model producing a hostile answer. What the policy bounds is what the agent can <em>do</em>, which is the part an attacker wants.</p>
                 </div>
             </div>
 
@@ -403,19 +400,19 @@ result = (
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>Compliance Audit and Virtual Filesystems</h2>
-                <p>Some requirements cannot be met by any declarative policy. A regulated environment needs a guaranteed record of every file the guest read or wrote, and it has to be one the guest cannot evade. A data platform may need artifacts streamed to object storage <em>as they are written</em>, not collected after the process exits.</p>
-                <p>Handlers cover both. Your code runs inside the supervisor, registered on whichever syscalls you care about, and sees each call before the kernel acts on it. <strong>Because interception sits below the language runtime, an audit trail built this way cannot be routed around by <code class="inline">ctypes</code>, a raw syscall, or a rewritten import hook</strong>. Evading it would mean evading seccomp, which Sandlock blocks at the BPF level. Compare eBPF file tracing, which needs <code class="inline">CAP_BPF</code> and is often unavailable on managed Kubernetes.</p>
+                <p>Some requirements no declarative policy can meet: a guaranteed record of every file the guest touched, or artifacts streamed to object storage as they are written rather than collected afterwards.</p>
+                <p>Handlers run your code inside the supervisor, on whichever syscalls you name, before the kernel acts. <strong>Because interception sits below the language runtime, an audit trail built this way cannot be routed around by <code class="inline">ctypes</code> or a raw syscall</strong>, and unlike eBPF tracing it needs no <code class="inline">CAP_BPF</code>.</p>
 
                 <div class="usecase-points">
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Files with no host backing.</strong> Intercept <code class="inline">openat</code> and hand back a sealed in-memory file: a per-call config, a secret, a remote object.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Slow work without stalling.</strong> A handler doing a network round trip defers to a worker; the guest stays parked on that one call while everything else proceeds.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Confinement is never weakened.</strong> Built-ins run first, and a handler registered on a blocklisted syscall is rejected before fork rather than silently converting a kernel deny into an allow.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Rust, Python, or C.</strong> The same handler model is exposed through the C ABI, so any language that can call C can supply one.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Files with no host backing.</strong> Intercept <code class="inline">openat</code> and return a sealed in-memory file.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Slow work without stalling.</strong> A handler doing a network round trip defers to a worker.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Confinement is never weakened.</strong> Built-ins run first, and a handler on a blocklisted syscall is rejected before fork.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Rust, Python, or C</strong>, through the same model.</span></div>
                 </div>
 
                 <div class="who">
-                    <span class="mono-label">Why it has to live here</span>
-                    <p>The kernel allows one seccomp notification listener per process. Code that wants to intercept extra syscalls in the same sandbox must run inside the same supervisor loop, which is exactly what the <a href="/docs/handlers.html">handler API</a> provides without forking Sandlock.</p>
+                    <span class="mono-label">Why it lives here</span>
+                    <p>The kernel allows one seccomp notification listener per process, so extra interception must run inside the same supervisor loop. That is what the <a href="/docs/handlers.html">handler API</a> provides.</p>
                 </div>
             </div>
 
@@ -455,20 +452,19 @@ sb.run_with_handlers(
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>More Pods per Node on Kubernetes</h2>
-                <p>A container charges you before your workload runs a single instruction: namespaces to construct, cgroups to wire, a privileged runtime to mediate it. That cost is per pod and you pay it on every start, which is why short-lived pods are expensive and dense nodes are hard.</p>
-                <p><code class="inline">sandlock-oci</code> implements the same OCI runtime interface, so containerd, CRI-O, and the kubelet drive it in place of <code class="inline">runc</code> and your existing images need no changes. What it produces underneath is different: <strong>a namespace-less, cgroup-less container confined by Landlock and seccomp, running unprivileged</strong>. There is nothing per-pod for the kernel to construct and tear down, so a pod costs roughly what the process inside it costs.</p>
+                <p>A container charges you before your workload runs an instruction: namespaces to construct, cgroups to wire, a privileged runtime to mediate it. That cost is per pod, paid on every start.</p>
+                <p><code class="inline">sandlock-oci</code> implements the same OCI runtime interface, so containerd, CRI-O, and the kubelet drive it in place of <code class="inline">runc</code> with your images unchanged. What it produces is <strong>namespace-less and cgroup-less, confined by Landlock and seccomp</strong>, so a pod costs roughly what the process inside it costs.</p>
 
                 <div class="usecase-points">
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>About 5 ms to start, against roughly 200 ms for a container.</strong> Short-lived pods stop being dominated by the runtime.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>97% of bare-metal throughput</strong> on the Redis benchmark, where the same workload under Docker held 63%. The node spends its cycles on the workload.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>No namespaces, no cgroups, no privileged daemon.</strong> Confinement is a ruleset the kernel evaluates, not an environment it assembles.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Checkpoint and restore</strong> a running sandbox to an image directory, so an idle pod can give its memory back and return where there is room.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Drop-in.</strong> Accepts the runc flags containerd and CRI-O pass, and supports OCI bundle versions 1.0.x, 1.1.x, and 1.2.x. Anything else is rejected at create rather than mis-mapped.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>About 5 ms to start</strong>, against roughly 200 ms for a container.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>97% of bare-metal throughput</strong> on the Redis benchmark, where Docker held 63%.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>No namespaces, no cgroups, no privileged daemon.</strong></span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Checkpoint and restore</strong>, so an idle pod can give its memory back.</span></div>
                 </div>
 
                 <div class="who">
                     <span class="mono-label">What you give up</span>
-                    <p>The parts of a container that <em>are</em> namespaces: a pod-private PID space and network stack. <code class="inline">linux.namespaces</code> is ignored by design. If a workload depends on those specifically rather than on the isolation they happen to provide, keep it on <code class="inline">runc</code>.</p>
+                    <p>The parts of a container that <em>are</em> namespaces: a pod-private PID space and network stack. A workload that needs those should stay on <code class="inline">runc</code>.</p>
                 </div>
             </div>
 
