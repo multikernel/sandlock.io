@@ -50,7 +50,7 @@
 
                 <div class="site-nav-dropdown">
                     <button class="site-nav-dropdown-trigger {% if url == '/how-it-works.html' or url == '/use-cases.html' or url == '/comparison.html' or url == '/security.html' %}active{% endif %}" aria-haspopup="true">
-                        {{ t.nav.product }}
+                        {{ t.nav.why }}
                         <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
                     </button>
                     <div class="site-nav-dropdown-menu">
@@ -93,7 +93,23 @@
                     </div>
                 </div>
 
-                <a href="/enterprise.html" class="site-nav-link {% if url == '/enterprise.html' %}active{% endif %}">{{ t.nav.enterprise }}</a>
+                <div class="site-nav-dropdown">
+                    <button class="site-nav-dropdown-trigger {% if url == '/enterprise.html' %}active{% endif %}" aria-haspopup="true">
+                        {{ t.nav.products }}
+                        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+                    </button>
+                    <div class="site-nav-dropdown-menu">
+                        <a href="/enterprise.html" class="site-nav-dropdown-item {% if url == '/enterprise.html' %}active{% endif %}">
+                            {{ t.nav.products_overview }}<small>{{ t.nav.products_overview_sub }}</small>
+                        </a>
+                        <a href="/enterprise.html#http-api" class="site-nav-dropdown-item">
+                            {{ t.nav.http_api }}<small>{{ t.nav.http_api_sub }}</small>
+                        </a>
+                        <a href="/enterprise.html#scheduler" class="site-nav-dropdown-item">
+                            {{ t.nav.scheduler }}<small>{{ t.nav.scheduler_sub }}</small>
+                        </a>
+                    </div>
+                </div>
 
                 <div class="site-nav-divider"></div>
 
@@ -114,7 +130,7 @@
         <div class="site-mobile-nav-inner">
             <a href="/" class="site-mobile-link {% if url == '/' %}active{% endif %}">{{ t.nav.home }}</a>
 
-            <div class="site-mobile-heading">{{ t.nav.product }}</div>
+            <div class="site-mobile-heading">{{ t.nav.why }}</div>
             <a href="/how-it-works.html" class="site-mobile-link {% if url == '/how-it-works.html' %}active{% endif %}">{{ t.nav.overview }}</a>
             <a href="/use-cases.html" class="site-mobile-link {% if url == '/use-cases.html' %}active{% endif %}">{{ t.nav.use_cases }}</a>
             <a href="/comparison.html" class="site-mobile-link {% if url == '/comparison.html' %}active{% endif %}">{{ t.nav.comparison }}</a>
@@ -127,8 +143,12 @@
             <a href="/docs/python.html" class="site-mobile-link {% if url == '/docs/python.html' %}active{% endif %}">Python SDK</a>
             <a href="/docs/reference.html" class="site-mobile-link {% if url == '/docs/reference.html' %}active{% endif %}">{{ t.nav.reference }}</a>
 
+            <div class="site-mobile-heading">{{ t.nav.products }}</div>
+            <a href="/enterprise.html" class="site-mobile-link {% if url == '/enterprise.html' %}active{% endif %}">{{ t.nav.products_overview }}</a>
+            <a href="/enterprise.html#http-api" class="site-mobile-link">{{ t.nav.http_api }}</a>
+            <a href="/enterprise.html#scheduler" class="site-mobile-link">{{ t.nav.scheduler }}</a>
+
             <div class="site-mobile-heading">{{ t.nav.company }}</div>
-            <a href="/enterprise.html" class="site-mobile-link {% if url == '/enterprise.html' %}active{% endif %}">{{ t.nav.enterprise }}</a>
             <a href="https://github.com/multikernel/sandlock" target="_blank" rel="noopener noreferrer" class="site-mobile-link">GitHub</a>
             <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer" class="site-mobile-cta">{{ t.nav.demo }}</a>
         </div>
@@ -164,13 +184,21 @@
 
                 <div class="footer-links">
                     <div class="footer-column">
-                        <h4>{{ t.footer.product }}</h4>
+                        <h4>{{ t.footer.why }}</h4>
                         <ul>
                             <li><a href="/how-it-works.html">{{ t.nav.overview }}</a></li>
                             <li><a href="/use-cases.html">{{ t.nav.use_cases }}</a></li>
                             <li><a href="/comparison.html">{{ t.nav.comparison }}</a></li>
                             <li><a href="/security.html">{{ t.nav.security }}</a></li>
-                            <li><a href="/enterprise.html">{{ t.nav.enterprise }}</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>{{ t.footer.products }}</h4>
+                        <ul>
+                            <li><a href="/enterprise.html">{{ t.nav.products_overview }}</a></li>
+                            <li><a href="/enterprise.html#http-api">{{ t.nav.http_api }}</a></li>
+                            <li><a href="/enterprise.html#scheduler">{{ t.nav.scheduler }}</a></li>
                         </ul>
                     </div>
 

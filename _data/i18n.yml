@@ -4,7 +4,7 @@
 en:
   nav:
     home: Home
-    product: Product
+    why: Why Sandlock
     overview: How It Works
     overview_sub: Landlock, seccomp, and the supervisor
     use_cases: Use Cases
@@ -24,11 +24,18 @@ en:
     reference_sub: Every policy field and default
     sdks: SDKs
     sdks_sub: Python, Rust, Go, and MCP
-    enterprise: Enterprise
+    products: Products
+    http_api: Sandbox HTTP API
+    http_api_sub: Remote execution over an HTTP API
+    scheduler: Sandbox Scheduler
+    scheduler_sub: Place sandboxes by checkpoint and restore
+    products_overview: Overview
+    products_overview_sub: What is open, what is licensed
     demo: Schedule a Demo
   footer:
     tagline: A Multikernel Technologies project
-    product: Product
+    why: Why Sandlock
+    products: Products
     documentation: Documentation
     company: Company
     rights: All rights reserved.

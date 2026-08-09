@@ -323,7 +323,7 @@ result = (
             <div class="usecase-body">
                 <h2>Compliance Audit and Virtual Filesystems</h2>
                 <p>Some requirements cannot be met by any declarative policy. A regulated environment needs a guaranteed record of every file the guest read or wrote, and it has to be one the guest cannot evade. A data platform may need artifacts streamed to object storage <em>as they are written</em>, not collected after the process exits.</p>
-                <p>Handlers cover both. Your code runs inside the supervisor, registered on whichever syscalls you care about, and sees each call before the kernel acts on it. <strong>Because interception sits below the language runtime, an audit trail built this way cannot be routed around by <code class="inline">ctypes</code>, a raw syscall, or a rewritten import hook</strong> — evading it would mean evading seccomp, which Sandlock blocks at the BPF level. Compare eBPF file tracing, which needs <code class="inline">CAP_BPF</code> and is often unavailable on managed Kubernetes.</p>
+                <p>Handlers cover both. Your code runs inside the supervisor, registered on whichever syscalls you care about, and sees each call before the kernel acts on it. <strong>Because interception sits below the language runtime, an audit trail built this way cannot be routed around by <code class="inline">ctypes</code>, a raw syscall, or a rewritten import hook</strong>. Evading it would mean evading seccomp, which Sandlock blocks at the BPF level. Compare eBPF file tracing, which needs <code class="inline">CAP_BPF</code> and is often unavailable on managed Kubernetes.</p>
 
                 <div class="usecase-points">
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>Files with no host backing.</strong> Intercept <code class="inline">openat</code> and hand back a sealed in-memory file: a per-call config, a secret, a remote object.</span></div>
@@ -408,7 +408,7 @@ sb.run_with_handlers(
 <section class="cta-band">
     <div class="cta-band-inner">
         <h2>Which One Is Yours?</h2>
-        <p>If your situation is close to one of these but not quite it, we would like to hear about it. The design partner program exists precisely for the cases the defaults do not cover.</p>
+        <p>If your situation is close to one of these but not quite it, we would like to hear about it. Running these at fleet scale is what the Sandbox HTTP API and Sandbox Scheduler are for.</p>
         <div class="button-group">
             <a href="/docs/getting-started.html" class="btn btn-primary">
                 <i data-lucide="rocket"></i>

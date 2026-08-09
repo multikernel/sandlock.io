@@ -31,7 +31,7 @@ _layouts/
   doc.html             documentation shell: sidebar, breadcrumb, prev/next pager
 _data/
   i18n.yml             strings for the header and footer chrome
-  docs.yml             documentation order — drives the sidebar AND the pager
+  docs.yml             documentation order; drives the sidebar AND the pager
 assets/
   css/styles.css       design system: tokens, hero, sections, cards, tables, code
   css/docs.css         three-column documentation layout

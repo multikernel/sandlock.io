@@ -182,7 +182,7 @@ confine(&amp;confinement)?;</code></pre>
 
 <p>The built-in chain always runs first, so a handler can extend confinement but never subvert it, and registering on a blocklisted syscall is rejected before fork rather than silently opening a bypass.</p>
 
-<p>The full API — the trait, the complete set of return actions, reading and writing guest memory, injecting synthetic file content, deferring slow work off the supervisor loop, continue-site safety, and the security boundary — is covered on <a href="/docs/handlers.html">Extension Handlers</a>.</p>
+<p>The full API, covering the trait, the complete set of return actions, reading and writing guest memory, injecting synthetic file content, deferring slow work off the supervisor loop, continue-site safety, and the security boundary, is covered on <a href="/docs/handlers.html">Extension Handlers</a>.</p>
 
 
 <h2>Protection posture</h2>
@@ -190,8 +190,8 @@ confine(&amp;confinement)?;</code></pre>
 <p>By default Sandlock enforces every Landlock protection the host supports and refuses to build when one it expects is unavailable. Two builder methods relax that, per protection:</p>
 
 <ul>
-    <li><code class="inline">allow_degraded(Protection::P)</code> &mdash; enforce <code class="inline">P</code> where the kernel supports it, silently skip it where it does not. For a mixed fleet.</li>
-    <li><code class="inline">disable(Protection::P)</code> &mdash; never enforce <code class="inline">P</code>, even on a kernel that supports it. For a workload that legitimately needs the capability the protection blocks.</li>
+    <li><code class="inline">allow_degraded(Protection::P)</code>: enforce <code class="inline">P</code> where the kernel supports it, silently skip it where it does not. For a mixed fleet.</li>
+    <li><code class="inline">disable(Protection::P)</code>: never enforce <code class="inline">P</code>, even on a kernel that supports it. For a workload that legitimately needs the capability the protection blocks.</li>
 </ul>
 
 <p>Calling neither leaves the protection in its default strict state. The methods are last-wins per protection, so a later call for the same value supersedes an earlier one.</p>

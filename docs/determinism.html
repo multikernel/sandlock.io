@@ -44,7 +44,7 @@ lede: "Four knobs that remove the usual reasons two identical runs produce diffe
 
 <h2>Frozen time</h2>
 
-<p><code class="inline">time_start</code> takes a Unix timestamp or an RFC 3339 / ISO 8601 string, and sets the sandbox's clock to that instant. <strong>Time then advances at real speed from that epoch</strong> — it is a shifted clock, not a stopped one, so a program that measures elapsed time still sees it elapse.</p>
+<p><code class="inline">time_start</code> takes a Unix timestamp or an RFC 3339 / ISO 8601 string, and sets the sandbox's clock to that instant. <strong>Time then advances at real speed from that epoch.</strong> It is a shifted clock, not a stopped one, so a program that measures elapsed time still sees it elapse.</p>
 
 <p>The offset is computed once at start as <code class="inline">desired - actual</code>, and every clock the sandbox reads has it added.</p>
 
@@ -58,7 +58,7 @@ lede: "Four knobs that remove the usual reasons two identical runs produce diffe
 
 <h3>Absolute timers</h3>
 
-<p>Shifting the clock creates a problem the supervisor has to undo. When a program arms an absolute timer, it computes the deadline from the clock it just read — which is the shifted one. Passing that deadline straight to the kernel would arm the timer at the wrong real time, off by exactly the offset.</p>
+<p>Shifting the clock creates a problem the supervisor has to undo. When a program arms an absolute timer, it computes the deadline from the clock it just read, which is the shifted one. Passing that deadline straight to the kernel would arm the timer at the wrong real time, off by exactly the offset.</p>
 
 <p>So the supervisor intercepts <code class="inline">clock_nanosleep</code>, <code class="inline">timer_settime</code>, and <code class="inline">timerfd_settime</code> when they carry <code class="inline">TIMER_ABSTIME</code>, and subtracts the offset before the kernel sees the deadline. The affected clocks are <code class="inline">CLOCK_MONOTONIC</code>, <code class="inline">CLOCK_MONOTONIC_RAW</code>, <code class="inline">CLOCK_MONOTONIC_COARSE</code>, and <code class="inline">CLOCK_BOOTTIME</code>.</p>
 
@@ -73,7 +73,7 @@ lede: "Four knobs that remove the usual reasons two identical runs produce diffe
 <div class="callout warn">
     <i data-lucide="triangle-alert"></i>
     <div class="callout-body">
-        <p><strong>This is a reproducibility tool, not a security one, and it fails open.</strong> If the supervisor cannot deliver deterministic bytes — an allocation failure, a failed write into guest memory — the call falls through and the child receives real kernel entropy. That is a determinism failure rather than a security failure, and it is the right trade: the alternative would be failing a program's entropy request outright. It does mean you should never treat a seeded run as guaranteed byte-identical without checking.</p>
+        <p><strong>This is a reproducibility tool, not a security one, and it fails open.</strong> If the supervisor cannot deliver deterministic bytes, whether from an allocation failure or a failed write into guest memory, the call falls through and the child receives real kernel entropy. That is a determinism failure rather than a security failure, and it is the right trade: the alternative would be failing a program's entropy request outright. It does mean you should never treat a seeded run as guaranteed byte-identical without checking.</p>
     </div>
 </div>
 

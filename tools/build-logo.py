@@ -118,7 +118,7 @@ def main():
     svg(a, MARK, "sandlock-mark.svg", BLUE, ORANGE, "Sandlock", 256, 256, 6, turdsize=9)
     svg(a, MARK, "sandlock-mark-inverse.svg", BLUE_INV, ORANGE_INV, "Sandlock", 256, 256, 6, turdsize=9)
     svg(a, FULL, "sandlock-logo.svg", BLUE, ORANGE,
-        "Sandlock — Linux process sandbox", 512, 438, 8, turdsize=6)
+        "Sandlock, a Linux process sandbox", 512, 438, 8, turdsize=6)
 
     lockup = transparent(src, FULL)
     lockup.thumbnail((880, 880), Image.LANCZOS)

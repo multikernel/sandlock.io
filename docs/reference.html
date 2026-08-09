@@ -264,10 +264,10 @@ num_cpus    = 2</code></pre>
 <h3>Rule shapes</h3>
 
 <ul>
-    <li><code class="inline">host:port[,port,...]</code> &mdash; no scheme prefix, covers TCP and UDP.</li>
-    <li><code class="inline">tcp://host:port</code> &mdash; TCP only.</li>
-    <li><code class="inline">udp://host:port</code> &mdash; UDP only. <code class="inline">udp://*:*</code> opens any UDP destination.</li>
-    <li><code class="inline">icmp://host</code> &mdash; kernel ping socket (<code class="inline">SOCK_DGRAM</code> + <code class="inline">IPPROTO_ICMP</code>). <code class="inline">icmp://*</code> opens any echo destination.</li>
+    <li><code class="inline">host:port[,port,...]</code>: no scheme prefix, covers TCP and UDP.</li>
+    <li><code class="inline">tcp://host:port</code>: TCP only.</li>
+    <li><code class="inline">udp://host:port</code>: UDP only. <code class="inline">udp://*:*</code> opens any UDP destination.</li>
+    <li><code class="inline">icmp://host</code>: kernel ping socket (<code class="inline">SOCK_DGRAM</code> + <code class="inline">IPPROTO_ICMP</code>). <code class="inline">icmp://*</code> opens any echo destination.</li>
 </ul>
 
 <div class="data-table-wrap">
@@ -422,8 +422,8 @@ num_cpus    = 2</code></pre>
 <p>By default Sandlock enforces every Landlock protection the host kernel supports and <strong>refuses to start when a required protection is unavailable</strong>. Two builder methods on <code class="inline">SandboxBuilder</code> relax the strict default per protection:</p>
 
 <ul>
-    <li><code class="inline">allow_degraded(Protection::P)</code> &mdash; enforce <code class="inline">P</code> where the host kernel supports it, silently skip it where it does not. Use this when deploying across a mixed fleet of kernels.</li>
-    <li><code class="inline">disable(Protection::P)</code> &mdash; never enforce <code class="inline">P</code>, even on a kernel that supports it. Use this when the workload legitimately needs the capability the protection blocks, for example signalling a sibling process that <code class="inline">SignalScope</code> would otherwise prevent.</li>
+    <li><code class="inline">allow_degraded(Protection::P)</code>: enforce <code class="inline">P</code> where the host kernel supports it, silently skip it where it does not. Use this when deploying across a mixed fleet of kernels.</li>
+    <li><code class="inline">disable(Protection::P)</code>: never enforce <code class="inline">P</code>, even on a kernel that supports it. Use this when the workload legitimately needs the capability the protection blocks, for example signalling a sibling process that <code class="inline">SignalScope</code> would otherwise prevent.</li>
 </ul>
 
 <p>Calling neither leaves the protection in its default <code class="inline">Strict</code> state. The methods are last-wins per protection.</p>
