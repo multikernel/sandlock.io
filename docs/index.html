@@ -55,6 +55,10 @@ lede: "Everything needed to write, test, and ship a Sandlock policy: a five-minu
         <h3><i data-lucide="dice-5"></i>Determinism</h3>
         <p>Frozen time via vDSO patching, a seeded PRNG for <code class="inline">getrandom</code>, sorted directory reads, and disabled ASLR.</p>
     </a>
+    <a href="/docs/protections.html" class="docs-index-card">
+        <h3><i data-lucide="shield-half"></i>Kernel Protections</h3>
+        <p>What each Landlock protection stops, which kernel provides it, and how to relax one for an older host without doing it silently.</p>
+    </a>
     <a href="/docs/policy.html" class="docs-index-card">
         <h3><i data-lucide="git-branch"></i>Dynamic Policy</h3>
         <p>Inspect syscall events at runtime, return a verdict, and tighten the sandbox while it runs.</p>
@@ -133,7 +137,7 @@ lede: "Everything needed to write, test, and ship a Sandlock policy: a five-minu
 <div class="callout">
     <i data-lucide="info"></i>
     <div class="callout-body">
-        <p><strong>Older kernels.</strong> Sandlock refuses to start by default when a protection it expects is unavailable. Individual protections can be degraded or disabled per policy so a sandbox can run on a kernel below 6.12. See <a href="/docs/reference.html#protection-opt-out">protection opt-out</a>.</p>
+        <p><strong>Older kernels.</strong> Sandlock refuses to start by default when a protection it expects is unavailable. Individual protections can be degraded or disabled per policy so a sandbox can run on a kernel below 6.12. See <a href="/docs/protections.html">Kernel Protections</a>.</p>
     </div>
 </div>
 

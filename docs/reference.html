@@ -469,6 +469,8 @@ num_cpus    = 2</code></pre>
 
 <p>From the CLI the equivalents are <code class="inline">--allow-degraded &lt;PROTECTION&gt;</code> and <code class="inline">--disable &lt;PROTECTION&gt;</code>, both repeatable. <code class="inline">--disable fs-refer</code> is rejected: the kernel denies REFER by default when the rule is unhandled, so disabling it would only tighten the sandbox and the flag would be misleading.</p>
 
+<p><a href="/docs/protections.html">Kernel Protections</a> covers this in full: what each protection stops, which kernel version provides it, how to read the resolved posture back, and what each waiver costs.</p>
+
 <h2>Enumerations and result types</h2>
 
 <div class="code-block">

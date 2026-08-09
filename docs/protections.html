@@ -1,0 +1,259 @@
+---
+layout: doc
+title: "Kernel Protections"
+description: "Sandlock enforces every Landlock protection the host supports and refuses to start when one is missing. How to relax that per protection for older kernels, and what each waiver costs."
+permalink: /docs/protections.html
+short_title: "Kernel Protections"
+heading: "Kernel Protections"
+lede: "Sandlock refuses to start when a protection it expects is unavailable, which is the right default and the wrong one for a fleet with mixed kernels. Two builder methods relax it, one protection at a time, and never silently."
+---
+
+<p>Landlock did not arrive complete. Each release added access rights, and each is gated behind an ABI version the host kernel either provides or does not. Sandlock names six of them, and by default enforces all six.</p>
+
+<p>If the host is too old for one, <strong>the sandbox fails to build</strong> with an error naming the protection and the kernel's actual ABI. That is deliberate: the alternative is a sandbox that quietly confines less than the policy says, which is the failure mode you learn about from an incident rather than from an error.</p>
+
+<h2>The six protections</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Protection</th>
+                <th scope="col">CLI name</th>
+                <th scope="col">ABI</th>
+                <th scope="col">Kernel</th>
+                <th scope="col">What it stops</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row"><code>FsRefer</code></th>
+                <td><code>fs-refer</code></td>
+                <td>v2</td>
+                <td>5.19</td>
+                <td>Linking or renaming a file across directories</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>FsTruncate</code></th>
+                <td><code>fs-truncate</code></td>
+                <td>v3</td>
+                <td>6.2</td>
+                <td>Truncating a file through <code>truncate</code>, <code>ftruncate</code>, <code>creat</code>, or <code>O_TRUNC</code></td>
+            </tr>
+            <tr>
+                <th scope="row"><code>NetTcp</code></th>
+                <td><code>net-tcp</code></td>
+                <td>v4</td>
+                <td>6.7</td>
+                <td>TCP bind and connect outside the port allowlist</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>FsIoctlDev</code></th>
+                <td><code>fs-ioctl-dev</code></td>
+                <td>v5</td>
+                <td>6.10</td>
+                <td><code>ioctl</code> on character and block devices</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>SignalScope</code></th>
+                <td><code>signal-scope</code></td>
+                <td>v6</td>
+                <td>6.12</td>
+                <td>Signalling a process outside the sandbox</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>AbstractUnixSocketScope</code></th>
+                <td><code>abstract-unix-socket-scope</code></td>
+                <td>v6</td>
+                <td>6.12</td>
+                <td>Connecting to an abstract UNIX socket outside the sandbox</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<p>This is why the site says Linux 6.12: it is the first kernel that provides all six. Everything below that needs at least one waiver.</p>
+
+<h2>Check the host first</h2>
+
+<p><code class="inline">sandlock check</code> reports the running kernel's Landlock ABI and, for each protection, whether this host can provide it. Run it before you deploy rather than after a sandbox refuses to build.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock check</span></code></pre>
+</div>
+
+<h2>Three states</h2>
+
+<p>Every protection sits in one of three states. Unnamed protections are <code class="inline">Strict</code>, so a policy that says nothing about protections behaves exactly as it did before this API existed.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">State</th>
+                <th scope="col">On a kernel that supports it</th>
+                <th scope="col">On a kernel that does not</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row"><code>Strict</code><br><span class="mono-label" style="font-size:10px">the default</span></th>
+                <td>Enforced</td>
+                <td><strong>The sandbox fails to build</strong>, naming the protection and the host's ABI</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>Degradable</code><br><span class="mono-label" style="font-size:10px">allow_degraded</span></th>
+                <td>Enforced</td>
+                <td>Skipped, and reported as degraded</td>
+            </tr>
+            <tr>
+                <th scope="row"><code>Disabled</code><br><span class="mono-label" style="font-size:10px">disable</span></th>
+                <td>Not enforced</td>
+                <td>Not enforced</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The two waivers answer different questions. <strong><code class="inline">allow_degraded</code> is about the fleet</strong>: enforce this wherever you can, and do not fail on the hosts that cannot. <strong><code class="inline">disable</code> is about the workload</strong>: this program legitimately needs the capability the protection blocks, so do not enforce it anywhere.</p>
+
+<p>Reaching for <code class="inline">disable</code> when you meant <code class="inline">allow_degraded</code> gives up the protection on every host, including the modern ones. It is the more expensive mistake of the two.</p>
+
+<h2>Setting them</h2>
+
+<p>Both waivers are last-wins per protection: a later call for the same protection supersedes the earlier one, so the two lists cannot contradict each other.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> sandlock_core::{Protection, Sandbox};
+
+<span class="c">// Build on kernels below 6.12, where the v6 scopes do not exist.</span>
+<span class="c">// On a kernel that has them, they are still enforced.</span>
+<span class="k">let</span> sb = Sandbox::builder()
+    .fs_read(<span class="s">"/usr"</span>).fs_read(<span class="s">"/lib"</span>)
+    .fs_write(<span class="s">"/tmp"</span>)
+    .allow_degraded(Protection::SignalScope)
+    .allow_degraded(Protection::AbstractUnixSocketScope)
+    .build()?;</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock <span class="k">import</span> Sandbox, Protection
+
+sandbox = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>],
+    fs_writable=[<span class="s">"/tmp"</span>],
+    allow_degraded=[
+        Protection.SIGNAL_SCOPE,
+        Protection.ABSTRACT_UNIX_SOCKET_SCOPE,
+    ],
+)</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">go</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sb := &amp;sandlock.Sandbox{
+	FSReadable: []<span class="k">string</span>{<span class="s">"/usr"</span>, <span class="s">"/lib"</span>},
+	FSWritable: []<span class="k">string</span>{<span class="s">"/tmp"</span>},
+	AllowDegraded: []sandlock.Protection{
+		sandlock.ProtectionSignalScope,
+		sandlock.ProtectionAbstractUnixSocketScope,
+	},
+}</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">shell</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># Both flags are repeatable.</span>
+<span class="p">$</span> <span class="k">sandlock run</span> \
+    --allow-degraded signal-scope \
+    --allow-degraded abstract-unix-socket-scope \
+    -r /usr -r /lib -w /tmp -- ./task.sh
+
+<span class="c"># A workload that genuinely must signal a process outside the sandbox.</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --disable signal-scope \
+    -r /usr -r /lib -w /tmp -- ./supervisor.sh</code></pre>
+</div>
+
+<h2>Reading the result back</h2>
+
+<p>A waiver is never silent. <code class="inline">Sandbox::active_protections()</code> returns each protection's resolved status, so a deployment can assert its posture rather than assume it.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Status</th>
+                <th scope="col">Means</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>Active</code></th><td>Enforced. The policy asked for it and the host provides it.</td></tr>
+            <tr><th scope="row"><code>Degraded</code></th><td>Waived by <code>allow_degraded</code> and skipped, because this host is too old.</td></tr>
+            <tr><th scope="row"><code>Disabled</code></th><td>Waived by <code>disable</code>, regardless of the host.</td></tr>
+            <tr><th scope="row"><code>Unavailable</code></th><td>Strict and unavailable. This is the state that failed the build.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The distinction between <code class="inline">Degraded</code> and <code class="inline">Disabled</code> is worth surfacing in your own monitoring. The first tells you a host is behind and will start enforcing again when it is upgraded. The second tells you a decision was made, and will keep applying after every upgrade until someone revisits it.</p>
+
+<h2>FsRefer cannot be disabled</h2>
+
+<p><code class="inline">disable(Protection::FsRefer)</code> is rejected at build time with an <code class="inline">Invalid</code> error, and the reason is counterintuitive enough to be worth stating.</p>
+
+<p>Landlock denies cross-directory rename and link <strong>by default in every ruleset, even when REFER is not handled</strong>. Controlled renaming within writable areas works precisely <em>because</em> Sandlock handles REFER and grants it on writable paths, which is what the strict and degradable states do. Un-handling it cannot loosen anything; it only removes the mechanism that makes rename work at all.</p>
+
+<p>So <code class="inline">disable</code> here would do the opposite of what the name promises. Sandlock refuses rather than accept a call whose effect contradicts its meaning. If you wanted REFER enforced only where the kernel supports it, that is <code class="inline">allow_degraded</code>.</p>
+
+<h2>Waivers travel with a checkpoint</h2>
+
+<p>The resolved posture is part of a sandbox's checkpoint. A restored sandbox comes back with <strong>the protections it was built with, not the ones the new host happens to offer</strong>.</p>
+
+<p>That matters for a scheduler that moves sandboxes between machines: restoring onto a newer kernel does not quietly start enforcing something the workload was written against, and restoring onto an older one does not quietly stop enforcing something the policy required.</p>
+
+<h2>Choosing what to waive</h2>
+
+<p>Every waiver is confinement you no longer have, so the useful question is what each one costs.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Waiving</th>
+                <th scope="col">What the workload regains</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>SignalScope</code></th><td>The ability to signal processes outside the sandbox, including ones belonging to other users' sessions on the same host.</td></tr>
+            <tr><th scope="row"><code>AbstractUnixSocketScope</code></th><td>The ability to connect to abstract UNIX sockets outside the sandbox, which is how a good deal of desktop and system IPC is reached.</td></tr>
+            <tr><th scope="row"><code>FsIoctlDev</code></th><td>Device <code>ioctl</code> on any device node the filesystem rules already expose.</td></tr>
+            <tr><th scope="row"><code>NetTcp</code></th><td>Kernel-level TCP port enforcement. Destination checks on the on-behalf path still apply, so this is narrower than it sounds, but the cheap path is gone.</td></tr>
+            <tr><th scope="row"><code>FsTruncate</code></th><td>Truncating files it can otherwise open, which turns a read grant into a way to destroy content.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>A waiver is a threat-model change, not a compatibility flag.</strong> The two v6 scopes are the usual ones to degrade, because 6.12 is recent and they are the difference between running on it and not. The rest are worth an explicit decision: if you find yourself degrading <code class="inline">FsTruncate</code> to support a 6.0 host, the honest summary is that this fleet does not yet have the kernel Sandlock is built for.</p>
+    </div>
+</div>
