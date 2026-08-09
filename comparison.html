@@ -290,13 +290,13 @@ permalink: /comparison.html
             </div>
 
             <div class="alt-card">
-                <h3>Hand-written seccomp filters</h3>
-                <p class="what">The layer Sandlock builds on. Precise, and free at runtime.</p>
+                <h3>OpenShell</h3>
+                <p class="what">An agent-first control plane from NVIDIA: a gateway, a policy engine, and privacy-aware routing for model calls.</p>
                 <dl>
                     <dt>Difference</dt>
-                    <dd>A raw filter <strong>cannot inspect an argument behind a pointer</strong>, because the kernel re-reads user memory after the filter runs. Sandlock puts path decisions in Landlock and destination decisions in a supervisor that duplicates the socket, so the combination is sound rather than plausible-looking.</dd>
-                    <dt>Prefer a raw filter when</dt>
-                    <dd>You need one narrow syscall restriction and nothing else.</dd>
+                    <dd>OpenShell is a <strong>layer above a sandbox rather than a sandbox</strong>. It requires Docker, Podman, a microVM, or Kubernetes underneath and coordinates their lifecycle; Sandlock is the confinement itself, with no runtime to install and no image to build. They compose more naturally than they compete.</dd>
+                    <dt>Prefer OpenShell when</dt>
+                    <dd>You want the control plane around the sandbox, particularly its inference routing, which keeps sensitive context on sandbox compute and swaps model backends at runtime. Sandlock has no equivalent; its HTTP ACL and credential injection govern the request, not which model serves it.</dd>
                 </dl>
             </div>
 
