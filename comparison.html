@@ -84,30 +84,74 @@ permalink: /comparison.html
 
 .not-for {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: var(--space-5);
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
     margin-top: var(--space-8);
 }
 
+@media (max-width: 1000px) {
+    .not-for {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 660px) {
+    .not-for {
+        grid-template-columns: 1fr;
+    }
+}
+
 .not-for-item {
-    padding: var(--space-6);
+    padding: var(--space-5) var(--space-6);
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-left: 2px solid var(--error);
     border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
 }
 
 .not-for-item h3 {
     font-size: var(--text-base);
     font-weight: 700;
     color: white;
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-2);
+    letter-spacing: -0.01em;
 }
 
 .not-for-item p {
     font-size: var(--text-sm);
     line-height: var(--leading-relaxed);
     color: rgba(255, 255, 255, 0.55);
+    flex: 1;
+}
+
+.not-for-item .instead {
+    flex: none;
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.not-for-item .instead b {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.35);
+    margin-bottom: var(--space-1);
+}
+
+.not-for-item .instead a {
+    color: var(--accent-400);
+    text-decoration: underline;
+    text-decoration-color: rgba(215, 176, 87, 0.4);
+    text-underline-offset: 2px;
 }
 </style>
 
@@ -278,38 +322,44 @@ permalink: /comparison.html
                 <span>Honest limits</span>
             </div>
             <h2 class="section-title">When Sandlock Is the Wrong Tool</h2>
-            <p class="section-subtitle">Picking the wrong isolation primitive is worse than picking none, because it buys confidence you have not actually earned. These are the cases where you should reach for something else.</p>
+            <p class="section-subtitle">Picking the wrong isolation primitive is worse than picking none, because it buys confidence you have not earned. In these cases, reach for something else.</p>
         </div>
 
         <div class="not-for">
             <div class="not-for-item">
                 <h3>You need a separate kernel</h3>
-                <p>Sandlock's workload runs on your kernel. A kernel-level vulnerability is a shared risk. If your threat model includes an attacker who will spend a kernel exploit on you, use a hypervisor boundary: a microVM, or Multikernel's per-workload kernel architecture.</p>
+                <p>The workload runs on your kernel, so a kernel-level vulnerability is a shared risk. If your threat model includes an attacker willing to spend a kernel exploit, you need a hypervisor boundary.</p>
+                <p class="instead"><b>Use instead</b>A microVM, or <a href="https://multikernel.io" target="_blank" rel="noopener noreferrer">Multikernel's per-workload kernel</a>.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>You need to boot a system</h3>
-                <p>Sandlock confines processes, not machines. If the thing you are running expects init, systemd, a full device tree, or its own kernel modules, a VM is the correct abstraction and Sandlock will fight you.</p>
+                <p>Sandlock confines processes, not machines. A workload that expects init, systemd, a full device tree, or its own kernel modules is asking for the wrong abstraction.</p>
+                <p class="instead"><b>Use instead</b>A virtual machine.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>Your kernel is older than 6.12</h3>
-                <p>Landlock ABI v6 lands in 6.12, and the strict default refuses to start without the protections it expects. Individual protections can be degraded or disabled per policy, but each one you waive is confinement you no longer have.</p>
+                <p>Landlock ABI v6 lands in 6.12, and the strict default refuses to start without the protections it expects.</p>
+                <p class="instead"><b>Use instead</b>Sandlock with protections degraded per policy, accepting that each one waived is confinement you no longer have.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>You need hard CPU or memory guarantees</h3>
-                <p>Limits are enforced by the supervisor rather than by cgroups: memory by tracking allocation syscalls, CPU by cycling SIGSTOP and SIGCONT. That is a budget, and a good one, but it is not the scheduler-level guarantee a cgroup gives you.</p>
+                <p>Limits come from the supervisor, not cgroups: memory by tracking allocation syscalls, CPU by cycling SIGSTOP and SIGCONT. That bounds consumption without reserving capacity.</p>
+                <p class="instead"><b>Use instead</b>A cgroup on the Sandlock process itself. The two compose.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>You are not on Linux</h3>
-                <p>Landlock and seccomp are Linux facilities. There is no macOS, BSD, or Windows port, and there will not be one, because the entire design rests on these two kernel interfaces.</p>
+                <p>Landlock and seccomp are Linux facilities, and the entire design rests on them. There is no port to another platform and there will not be one.</p>
+                <p class="instead"><b>Use instead</b>A VM, or platform-native sandboxing.</p>
             </div>
 
             <div class="not-for-item">
-                <h3>You need dynamic, rotating secrets</h3>
-                <p>Credential injection loads the secret once at supervisor start. A leased or rotating value is picked up only on the next run. Sandlock composes with a secret manager rather than embedding one.</p>
+                <h3>You need rotating secrets</h3>
+                <p>Credential injection loads the secret once at supervisor start, so a leased or rotating value is only picked up on the next run.</p>
+                <p class="instead"><b>Use instead</b>Restart the sandbox on rotation. Sandlock composes with a secret manager rather than embedding one.</p>
             </div>
         </div>
     </div>
