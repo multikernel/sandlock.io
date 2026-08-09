@@ -298,23 +298,6 @@ permalink: /
             <p class="section-subtitle">Sandlock forks, installs confinement in the child before it executes anything, and only then lets the workload start. What the kernel can enforce, the kernel enforces.</p>
         </div>
 
-        <div class="ascii-diagram">
-<pre>Parent                              Child
-  │  fork()                           │
-  │──────────────────────────────────>│
-  │                                   ├─ 1. setpgid(0,0)
-  │                                   ├─ 2. Optional: chdir(cwd)
-  │                                   ├─ 3. <span class="hi">NO_NEW_PRIVS</span>
-  │                                   ├─ 4. <span class="hi">Landlock</span> (fs + net + IPC)
-  │                                   ├─ 5. <span class="hi">seccomp filter</span> (deny + notif)
-  │                                   │     └─ send notif fd ──> Parent
-  │  receive notif fd                 ├─ 6. Wait for "ready" signal
-  │  start supervisor (tokio)         ├─ 7. Close fds 3+
-  │  optional: vDSO patching          └─ 8. <span class="hi">exec(cmd)</span>
-  │  optional: policy_fn thread
-  │  optional: CPU throttle task</pre>
-        </div>
-
         <div class="pillars">
             <div class="pillar">
                 <h3>Landlock</h3>

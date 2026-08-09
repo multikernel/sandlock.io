@@ -91,6 +91,245 @@ permalink: /how-it-works.html
     color: var(--gray-900);
 }
 
+/* Confinement sequence. Two lanes on desktop, stacked on a phone, built from
+   text so it stays legible at any width. */
+.flow {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: var(--space-8);
+    margin-top: var(--space-10);
+    align-items: start;
+}
+
+.flow-child,
+.flow-parent {
+    padding: var(--space-6) var(--space-8);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+}
+
+.flow-child {
+    border-left: 3px solid var(--accent-500);
+}
+
+.flow-parent {
+    background: var(--gray-50);
+}
+
+.flow-lane-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gray-400);
+    margin-bottom: var(--space-5);
+}
+
+.flow-lane-label code {
+    font-size: 1em;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.flow-steps {
+    list-style: none;
+    position: relative;
+}
+
+.flow-steps li {
+    position: relative;
+    display: flex;
+    gap: var(--space-4);
+    padding-bottom: var(--space-4);
+}
+
+.flow-steps li:last-child {
+    padding-bottom: 0;
+}
+
+/* The rule joining one step marker to the next. */
+.flow-steps li:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 24px;
+    bottom: 0;
+    width: 1px;
+    background: var(--gray-200);
+}
+
+.flow-steps .n {
+    flex: none;
+    width: 23px;
+    height: 23px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-500);
+    background: white;
+    border: 1px solid var(--gray-200);
+    position: relative;
+    z-index: 1;
+}
+
+.flow-steps li.is-key .n {
+    color: var(--gray-900);
+    background: var(--accent-300);
+    border-color: var(--accent-500);
+}
+
+.flow-steps .what {
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: var(--gray-600);
+    padding-top: 3px;
+}
+
+.flow-steps .what code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    font-weight: 600;
+    color: var(--gray-900);
+}
+
+.flow-steps li.is-key .what {
+    color: var(--gray-800);
+}
+
+.flow-steps .what em {
+    display: block;
+    font-style: normal;
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+    margin-top: 3px;
+    line-height: var(--leading-snug);
+}
+
+.flow-side {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.flow-side li {
+    position: relative;
+    padding-left: var(--space-4);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: var(--gray-600);
+}
+
+.flow-side li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.6em;
+    width: 6px;
+    height: 1px;
+    background: var(--gray-300);
+}
+
+.flow-note {
+    margin-top: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--gray-200);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-500);
+}
+
+/* Component stack. */
+.stack {
+    margin-top: var(--space-10);
+}
+
+.tier {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: var(--space-6);
+    align-items: center;
+    padding: var(--space-5) 0;
+    position: relative;
+}
+
+.tier + .tier {
+    border-top: 1px solid var(--gray-200);
+}
+
+.tier-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gray-400);
+}
+
+.tier-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+.chip {
+    padding: var(--space-3) var(--space-5);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--gray-900);
+    text-align: center;
+}
+
+.chip em {
+    display: block;
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--gray-500);
+    margin-top: 2px;
+}
+
+.chip.is-direct {
+    border-style: dashed;
+    border-color: var(--accent-500);
+}
+
+.chip.is-wide {
+    flex: 1;
+}
+
+.chip.is-core {
+    background: var(--gray-900);
+    color: white;
+    border-color: var(--gray-900);
+}
+
+.chip.is-core em {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.stack-note {
+    margin-top: var(--space-5);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-500);
+}
+
+.stack-note strong {
+    color: var(--gray-800);
+}
+
 .path-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -102,6 +341,20 @@ permalink: /how-it-works.html
     .layer {
         grid-template-columns: 1fr;
         gap: var(--space-5);
+    }
+
+    .flow {
+        grid-template-columns: 1fr;
+        gap: var(--space-5);
+    }
+
+    .tier {
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
+    }
+
+    .chip {
+        flex: 1 1 100%;
     }
 
     .path-grid {
@@ -189,21 +442,32 @@ permalink: /how-it-works.html
             <p class="section-subtitle">Order matters. Every restriction is in place before the workload's first instruction runs, and the parent only starts supervising after the child has confirmed the filter is installed.</p>
         </div>
 
-        <div class="ascii-diagram">
-<pre>Parent                              Child
-  │  fork()                           │
-  │──────────────────────────────────>│
-  │                                   ├─ 1. setpgid(0,0)
-  │                                   ├─ 2. Optional: chdir(cwd)
-  │                                   ├─ 3. <span class="hi">NO_NEW_PRIVS</span>
-  │                                   ├─ 4. <span class="hi">Landlock</span> (fs + net + IPC)
-  │                                   ├─ 5. <span class="hi">seccomp filter</span> (deny + notif)
-  │                                   │     └─ send notif fd ──> Parent
-  │  receive notif fd                 ├─ 6. Wait for "ready" signal
-  │  start supervisor (tokio)         ├─ 7. Close fds 3+
-  │  optional: vDSO patching          └─ 8. <span class="hi">exec(cmd)</span>
-  │  optional: policy_fn thread
-  │  optional: CPU throttle task</pre>
+        <div class="flow">
+            <div class="flow-child">
+                <div class="flow-lane-label">In the child, after <code>fork()</code></div>
+                <ol class="flow-steps">
+                    <li><span class="n">1</span><span class="what"><code>setpgid(0,0)</code></span></li>
+                    <li><span class="n">2</span><span class="what"><code>chdir(cwd)</code>, if the policy sets one</span></li>
+                    <li class="is-key"><span class="n">3</span><span class="what"><code>NO_NEW_PRIVS</code><em>a setuid binary can now confer nothing</em></span></li>
+                    <li class="is-key"><span class="n">4</span><span class="what"><code>Landlock</code> ruleset applied<em>filesystem, network, and IPC</em></span></li>
+                    <li class="is-key"><span class="n">5</span><span class="what"><code>seccomp</code> filter installed<em>deny list plus the notification listener, whose descriptor goes to the parent</em></span></li>
+                    <li><span class="n">6</span><span class="what">Wait for the parent's ready signal</span></li>
+                    <li class="is-key"><span class="n">7</span><span class="what">Close every descriptor above stderr</span></li>
+                    <li class="is-key"><span class="n">8</span><span class="what"><code>exec(cmd)</code><em>the workload's first instruction, already confined</em></span></li>
+                </ol>
+            </div>
+
+            <div class="flow-parent">
+                <div class="flow-lane-label">In the parent, meanwhile</div>
+                <ul class="flow-side">
+                    <li>Receives the notification descriptor</li>
+                    <li>Starts the supervisor on tokio</li>
+                    <li>Patches the vDSO, if time is frozen</li>
+                    <li>Starts the policy callback thread, if one is set</li>
+                    <li>Starts the CPU throttle task, if one is set</li>
+                </ul>
+                <p class="flow-note">Everything on the left happens before the workload exists. Everything on the right supervises it once it does.</p>
+            </div>
         </div>
 
         <div class="callout">
@@ -305,27 +569,32 @@ permalink: /how-it-works.html
             <p class="section-subtitle">Sandlock is written in Rust. Every interface, including the SDKs in other languages, drives the same core through the same policy object.</p>
         </div>
 
-        <div class="ascii-diagram">
-<pre>       ┌─────────────┐      ┌─────────────┐
-       │  Python SDK │      │   Go SDK    │
-       │   (ctypes)  │      │    (cgo)    │
-       └──────┬──────┘      └──────┬──────┘
-              │  FFI               │  FFI
-              └─────────┬──────────┘
-                        ▼
-┌──────────────┐    ┌──────────────────────────────┐
-│ sandlock CLI │───>│      <span class="hi">libsandlock_ffi.so</span>      │
-└──────────────┘    └───────────────┬──────────────┘
-                                    │
-┌──────────────┐                    │
-│ sandlock-oci │────────────┐       │
-│ (OCI runtime)│            │       │
-└──────────────┘            ▼       ▼
-                    ┌──────────────────────────────┐
-                    │        <span class="hi">sandlock-core</span>         │
-                    │  Landlock · seccomp · COW ·  │
-                    │  pipeline · policy_fn · vDSO │
-                    └──────────────────────────────┘</pre>
+        <div class="stack">
+            <div class="tier">
+                <div class="tier-label">Interfaces</div>
+                <div class="tier-items">
+                    <span class="chip">sandlock CLI</span>
+                    <span class="chip">Python SDK<em>ctypes</em></span>
+                    <span class="chip">Go SDK<em>cgo</em></span>
+                    <span class="chip is-direct">sandlock-oci<em>OCI runtime</em></span>
+                </div>
+            </div>
+
+            <div class="tier">
+                <div class="tier-label">C ABI</div>
+                <div class="tier-items">
+                    <span class="chip is-wide">libsandlock_ffi.so</span>
+                </div>
+            </div>
+
+            <div class="tier">
+                <div class="tier-label">Core</div>
+                <div class="tier-items">
+                    <span class="chip is-wide is-core">sandlock-core<em>Landlock &middot; seccomp &middot; COW &middot; pipeline &middot; policy_fn &middot; vDSO</em></span>
+                </div>
+            </div>
+
+            <p class="stack-note">The CLI and both SDKs reach the core through the C ABI. <strong>sandlock-oci links the core directly</strong>, since it is a Rust crate itself and has no reason to cross the boundary.</p>
         </div>
 
         <div class="data-table-wrap" style="margin-top: var(--space-8);">
