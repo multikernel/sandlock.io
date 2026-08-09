@@ -146,6 +146,27 @@ permalink: /security.html
     margin-bottom: var(--space-4);
 }
 
+.prop-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: var(--space-6) 0;
+}
+
+.prop-list li {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+    padding-left: var(--space-5);
+    border-left: 2px solid var(--accent-500);
+}
+
+.prop-list li strong {
+    color: var(--gray-900);
+    font-weight: 600;
+}
+
 .prose-block strong {
     color: var(--gray-900);
     font-weight: 600;
@@ -217,28 +238,28 @@ permalink: /security.html
             <div class="claim-col does">
                 <h3><i data-lucide="shield-check"></i>Sandlock defends against</h3>
                 <ul>
-                    <li><strong>Filesystem escape.</strong> A confined process can only open paths reachable through the granted Landlock rules. Denied paths override broader grants, and grants are recursive so there is no gap to walk through.</li>
-                    <li><strong>Unapproved network egress.</strong> Default-deny. With no rules, every TCP connect is refused by Landlock, and UDP, ICMP, and raw socket creation are refused at the seccomp layer.</li>
-                    <li><strong>Data exfiltration to an approved host on an unapproved path.</strong> HTTP rules match method, host, and path, so an agent permitted to call one endpoint cannot repurpose the connection.</li>
-                    <li><strong>Credential theft by the workload.</strong> The secret lives in the supervisor and is attached in the proxy after the ACL check. With <code class="inline">env:</code> sources, the variable is stripped from the child's environment.</li>
+                    <li><strong>Filesystem escape.</strong> Only paths reachable through the granted Landlock rules can be opened. Grants are recursive and denials override them.</li>
+                    <li><strong>Unapproved network egress.</strong> Default-deny. With no rules Landlock refuses every TCP connect, and UDP, ICMP, and raw socket creation are refused at the seccomp layer.</li>
+                    <li><strong>Exfiltration on an approved host.</strong> HTTP rules match method, host, and path, so an agent allowed one endpoint cannot repurpose the connection.</li>
+                    <li><strong>Credential theft by the workload.</strong> The secret stays in the supervisor and is attached after the ACL check; an <code class="inline">env:</code> source is stripped from the child.</li>
                     <li><strong>Privilege escalation via setuid.</strong> <code class="inline">NO_NEW_PRIVS</code> is set before the filter, so a setuid binary confers nothing.</li>
-                    <li><strong>Reaching sibling processes.</strong> Landlock's ABI v6 scopes deny abstract UNIX socket connections and signals to processes outside the sandbox.</li>
-                    <li><strong>Resource exhaustion of the host.</strong> Memory, concurrent processes, open files, CPU percentage, and COW disk usage are all capped.</li>
-                    <li><strong>Unintended writes.</strong> Copy-on-write stages writes in an upper layer, committed on success and discarded on error, so a failed run leaves the tree untouched.</li>
+                    <li><strong>Reaching sibling processes.</strong> Landlock ABI v6 scopes deny abstract UNIX socket connections and signals outside the sandbox.</li>
+                    <li><strong>Host resource exhaustion.</strong> Memory, concurrent processes, open files, CPU share, and COW disk usage are all capped.</li>
+                    <li><strong>Unintended writes.</strong> Copy-on-write stages writes and discards them on error, so a failed run leaves the tree untouched.</li>
                 </ul>
             </div>
 
             <div class="claim-col does-not">
                 <h3><i data-lucide="shield-off"></i>Sandlock does not defend against</h3>
                 <ul>
-                    <li><strong>Kernel vulnerabilities.</strong> The workload runs on your kernel. A privilege-escalation bug in a syscall the policy permits defeats the sandbox. This is the price of not using a hypervisor.</li>
-                    <li><strong>Hardware side channels.</strong> Spectre-class attacks, cache timing, and other microarchitectural leaks are out of scope. CPU pinning reduces sharing but is not a mitigation.</li>
-                    <li><strong>A policy that grants too much.</strong> <code class="inline">--net-allow '*'</code> permits any destination; <code class="inline">-w /</code> grants the filesystem. Sandlock enforces the policy you wrote, not the one you meant.</li>
-                    <li><strong>A hostile supervisor host.</strong> If an attacker already controls the process that launches Sandlock, they control the policy.</li>
-                    <li><strong>Denial of service against itself.</strong> A workload can spin, thrash, or wedge on its own limits. Limits protect the host, not the workload's own progress.</li>
-                    <li><strong>Open-file limits as confinement.</strong> <code class="inline">max_open_files</code> is enforced with <code class="inline">RLIMIT_NOFILE</code>. A sandbox launched by root or with <code class="inline">CAP_SYS_RESOURCE</code> can raise it again; treat it as a budget, not a boundary.</li>
-                    <li><strong>Covert channels between sandboxes.</strong> Two sandboxes on the same host share timing, disk, and memory bandwidth.</li>
-                    <li><strong>Packet crafting needs.</strong> Raw ICMP sockets are never exposed, by design. This is a deliberate reduction in capability, not an oversight.</li>
+                    <li><strong>Kernel vulnerabilities.</strong> The workload runs on your kernel. An escalation bug in a permitted syscall defeats the sandbox. This is the price of no hypervisor.</li>
+                    <li><strong>Hardware side channels.</strong> Spectre-class attacks and cache timing are out of scope. CPU pinning reduces sharing but is not a mitigation.</li>
+                    <li><strong>A policy that grants too much.</strong> <code class="inline">--net-allow '*'</code> permits any destination. Sandlock enforces the policy you wrote, not the one you meant.</li>
+                    <li><strong>A hostile launcher.</strong> An attacker who already controls the process that starts Sandlock controls the policy.</li>
+                    <li><strong>The workload starving itself.</strong> Limits protect the host, not the workload's own progress. A sandbox can still spin or wedge inside its budget.</li>
+                    <li><strong>Open-file limits as a boundary.</strong> <code class="inline">RLIMIT_NOFILE</code> can be raised again by a sandbox launched with the privilege to do so. Treat it as a budget.</li>
+                    <li><strong>Covert channels between sandboxes.</strong> Two sandboxes on one host share timing, disk, and memory bandwidth.</li>
+                    <li><strong>Packet crafting.</strong> Raw ICMP sockets are never exposed. A deliberate reduction in capability, not an oversight.</li>
                 </ul>
             </div>
         </div>
@@ -281,20 +302,42 @@ permalink: /security.html
 
         <div class="prose-block">
             <p>Sandlock starts from deny and requires you to open things up. This matters because the failure mode of a permissive default is silent: nothing breaks, and you learn about the gap from an incident rather than from an error.</p>
-
-            <h3>Network</h3>
-            <p>With no network rules, Landlock denies every TCP connect, and UDP, ICMP, and raw socket creation are denied at the seccomp layer. Protocol availability follows rule presence: no UDP rule means UDP sockets cannot be created at all. Unrestricted egress requires writing <code class="inline">--net-allow '*'</code> explicitly, and ICMP still needs its own <code class="inline">icmp://</code> rule on top of that.</p>
-
-            <h3>Filesystem</h3>
-            <p>With no filesystem rules, nothing is readable or writable beyond what the process already holds open. There is no implicit grant for <code class="inline">/usr</code>, <code class="inline">/lib</code>, or anything else, which is why every example on this site names them.</p>
-
-            <h3>Syscalls</h3>
-            <p>The default blocklist is applied unconditionally and cannot be turned off. A policy can add denials on top of it. Re-enabling is limited to named groups such as System V IPC, and unknown group names are rejected rather than ignored, so a typo fails loudly.</p>
-
-            <h3>Missing kernel protections</h3>
-            <p>By default Sandlock enforces every Landlock protection the host supports and <strong>refuses to start when a protection it expects is unavailable</strong>. Waiving one is a per-protection, explicit decision: <code class="inline">allow_degraded</code> enforces it where the kernel supports it and skips it where it does not, and <code class="inline">disable</code> turns it off outright. The resolved posture is part of a sandbox's checkpoint, so a restored sandbox comes back with the protections it was built with, not the ones the new host happens to offer.</p>
-            <p><code class="inline">sandlock check</code> reports the host's Landlock ABI and per-protection availability before you deploy.</p>
         </div>
+
+        <div class="data-table-wrap" style="margin-top: var(--space-6);">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Surface</th>
+                        <th scope="col">With no policy</th>
+                        <th scope="col">To open it up</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row">Filesystem</th>
+                        <td>Nothing readable or writable. No implicit grant for <code>/usr</code> or <code>/lib</code>.</td>
+                        <td>Name every path, which is why every example on this site does.</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Network</th>
+                        <td>Landlock denies every TCP connect; UDP, ICMP, and raw socket <em>creation</em> are denied at the seccomp layer.</td>
+                        <td><code>--net-allow '*'</code> explicitly. ICMP still needs its own <code>icmp://</code> rule on top.</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Syscalls</th>
+                        <td>The default blocklist applies unconditionally and cannot be turned off.</td>
+                        <td>Named groups only, such as System V IPC. An unknown group name is rejected, so a typo fails loudly.</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Kernel protections</th>
+                        <td>Every protection the host supports is enforced, and Sandlock <strong>refuses to start</strong> when one it expects is missing.</td>
+                        <td>Per protection, explicitly: <code>allow_degraded</code> skips it where the kernel lacks it, <code>disable</code> turns it off outright.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="table-note">Protocol availability follows rule presence: with no UDP rule, UDP sockets cannot be created at all. A sandbox's resolved protection posture is part of its checkpoint, so a restored sandbox returns with the protections it was built with rather than whatever the new host offers. <code>sandlock check</code> reports the host's Landlock ABI before you deploy.</p>
     </div>
 </section>
 
@@ -309,12 +352,15 @@ permalink: /security.html
         </div>
 
         <div class="prose-block">
-            <p>The point of credential injection is that a workload can use a secret without ever holding it. The secret is loaded into the supervisor from an environment variable, a file, or a file descriptor, and attached to a matching outbound request inside the proxy, <strong>strictly after the ACL check has passed</strong>. A request the policy would reject never gets the credential attached to it.</p>
-            <p>Three properties are worth stating plainly:</p>
-            <p><strong>The child does not carry the value.</strong> With an <code class="inline">env:</code> source, the variable is stripped from the child's environment, so a compromised agent cannot read its own key back. With <code class="inline">fd:</code>, the secret never touches disk at all.</p>
-            <p><strong>Cleartext HTTP is a warning, not a silent failure.</strong> Attaching a credential over plain HTTP sends it to the upstream in the clear. Sandlock emits a one-per-run warning rather than pretending the transport is safe.</p>
-            <p><strong>The MITM CA's private key stays in memory.</strong> With <code class="inline">--http-inject-ca</code>, Sandlock generates an ephemeral CA whose private key is never written to disk, and splices only the public certificate into the trust bundles you name, at open time.</p>
-            <p>Sandlock deliberately ships no secret-manager client. An external fetcher materializes the value into a <code class="inline">file:</code> or <code class="inline">fd:</code> source, which keeps it off <code class="inline">ps</code>, out of shell history, and out of the child's environment, and lets you use Vault, a cloud secret store, or a CSI driver without Sandlock having an opinion.</p>
+            <p>A workload can use a secret without ever holding it. The value is loaded into the supervisor from an environment variable, a file, or a file descriptor, and attached to a matching request inside the proxy <strong>strictly after the ACL check has passed</strong>, so a request the policy would reject never carries it.</p>
+
+            <ul class="prop-list">
+                <li><strong>The child never carries the value.</strong> An <code class="inline">env:</code> source is stripped from the child's environment, so a compromised agent cannot read its own key back. An <code class="inline">fd:</code> source never touches disk.</li>
+                <li><strong>Cleartext HTTP warns rather than failing silently.</strong> Attaching a credential over plain HTTP sends it upstream in the clear, so Sandlock emits a one-per-run warning instead of treating the transport as safe.</li>
+                <li><strong>The MITM CA's private key stays in memory.</strong> <code class="inline">--http-inject-ca</code> generates an ephemeral CA, writes only the public certificate into the trust bundles you name, and never persists the key.</li>
+            </ul>
+
+            <p>Sandlock ships no secret-manager client, deliberately. An external fetcher materializes the value into a <code class="inline">file:</code> or <code class="inline">fd:</code> source, keeping it off <code class="inline">ps</code>, out of shell history, and out of the child's environment, and letting you use Vault, a cloud secret store, or a CSI driver without Sandlock having an opinion.</p>
         </div>
     </div>
 </section>
