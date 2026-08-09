@@ -16,7 +16,9 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="/assets/js/icons.js" defer></script>
 
-    <link rel="icon" type="image/svg+xml" href="/assets/images/sandlock-mark.svg">
+    <link rel="icon" type="image/svg+xml" href="/assets/images/sandlock-mark.svg" media="(prefers-color-scheme: light)">
+    <link rel="icon" type="image/svg+xml" href="/assets/images/sandlock-mark-inverse.svg" media="(prefers-color-scheme: dark)">
+    <link rel="apple-touch-icon" href="/assets/images/sandlock-logo.png">
     <meta name="description" content="{% if page.description %}{{ page.description }}{% else %}{{ site.description }}{% endif %}">
     <meta name="keywords" content="Linux sandbox, Landlock, seccomp, seccomp user notification, AI agent sandbox, untrusted code execution, container alternative, rootless isolation">
     <link rel="canonical" href="{{ site.url }}{{ url }}">
@@ -25,8 +27,10 @@
     <meta property="og:description" content="{% if page.description %}{{ page.description }}{% else %}{{ site.description }}{% endif %}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ site.url }}{{ url }}">
-    <meta property="og:image" content="{{ site.url }}/assets/images/sandlock-mark.svg">
-    <meta name="twitter:card" content="summary">
+    <meta property="og:image" content="{{ site.url }}/assets/images/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
     <a href="#main" class="skip-link">Skip to content</a>
@@ -34,7 +38,7 @@
     <header class="site-header">
         <div class="site-header-inner">
             <a href="/" class="site-logo" aria-label="Sandlock home">
-                <img src="/assets/images/sandlock-mark.svg" alt="" width="30" height="30">
+                <img src="/assets/images/sandlock-mark-inverse.svg" alt="" width="34" height="34">
                 <span class="site-logo-text">
                     <span class="site-logo-name">sandlock</span>
                     <span class="site-logo-sub">by Multikernel</span>
@@ -139,7 +143,7 @@
             <div class="footer-main">
                 <div class="footer-brand">
                     <div class="footer-logo">
-                        <img src="/assets/images/sandlock-mark.svg" alt="" class="footer-logo-img" width="28" height="28">
+                        <img src="/assets/images/sandlock-mark-inverse.svg" alt="" class="footer-logo-img" width="32" height="32">
                         <div class="footer-brand-info">
                             <h3>Sandlock</h3>
                             <p>{{ t.footer.tagline }}</p>
