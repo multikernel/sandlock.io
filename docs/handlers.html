@@ -1,0 +1,460 @@
+---
+layout: doc
+title: "Extension Handlers"
+description: "Sandlock's programmable syscall interception: register your own handlers on any syscall, deny, fake a return value, inject synthetic file content, or defer slow work off the supervisor loop."
+permalink: /docs/handlers.html
+short_title: "Extension Handlers"
+heading: "Extension Handlers"
+lede: "Everything up to here is policy you declare. Handlers are the layer where the sandbox becomes programmable: your own code runs inside the supervisor, sees a syscall before the kernel acts on it, and decides what the workload observes."
+---
+
+<p>Sandlock routes every intercepted syscall through a chain-of-responsibility table. Built-in handlers (chroot, COW, procfs, network, port remap, resource accounting) register for the syscall numbers they care about; within a chain, handlers run in registration order and the first one to return something other than <em>continue</em> wins.</p>
+
+<p><code class="inline">Handler</code> is the public extension trait that appends your handlers to that chain, after all the built-ins. With it you can observe any syscall Sandlock intercepts, deny it, fabricate its return value, hand the workload a file that does not exist on disk, or park the call while you go ask a remote service.</p>
+
+<h2>Why this is a trait and not a fork</h2>
+
+<p>The kernel permits exactly one <code class="inline">SECCOMP_FILTER_FLAG_NEW_LISTENER</code> per process, which means one supervisor task. Code that wants to intercept extra syscalls in the same sandbox as the built-ins <strong>has to run inside the same dispatch loop</strong>. There is no second listener to attach to.</p>
+
+<p>Without an extension point the only options would be forking <code class="inline">sandlock-core</code> or duplicating its supervisor. The handler trait exists so a downstream crate can depend on <code class="inline">sandlock-core</code> as an ordinary dependency, with no fork, no <code class="inline">[patch.crates-io]</code>, and no copy of the notification loop to keep in sync.</p>
+
+<h2>Writing a handler</h2>
+
+<p>The trait has a single method returning a boxed future, kept dyn-compatible so the supervisor can store handlers as <code class="inline">Vec&lt;Arc&lt;dyn Handler&gt;&gt;</code>. State lives on the struct's fields, which avoids <code class="inline">Arc::clone</code> ladders and closure ceremony at the call site.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> std::future::Future;
+<span class="k">use</span> std::pin::Pin;
+<span class="k">use</span> std::sync::atomic::{AtomicU64, Ordering};
+<span class="k">use</span> sandlock_core::{Handler, HandlerCtx, Sandbox};
+<span class="k">use</span> sandlock_core::seccomp::notif::NotifAction;
+
+<span class="k">struct</span> OpenAudit { count: AtomicU64 }
+
+<span class="k">impl</span> Handler <span class="k">for</span> OpenAudit {
+    <span class="k">fn</span> handle&lt;<span class="s">'a</span>&gt;(
+        &amp;<span class="s">'a</span> <span class="k">self</span>,
+        cx: &amp;<span class="s">'a</span> HandlerCtx,
+    ) -&gt; Pin&lt;Box&lt;<span class="k">dyn</span> Future&lt;Output = NotifAction&gt; + Send + <span class="s">'a</span>&gt;&gt; {
+        Box::pin(<span class="k">async move</span> {
+            <span class="k">let</span> n = <span class="k">self</span>.count.fetch_add(1, Ordering::SeqCst) + 1;
+            <span class="k">eprintln!</span>(<span class="s">"[audit #{n}] pid={} openat"</span>, cx.notif.pid);
+            NotifAction::Continue
+        })
+    }
+}</code></pre>
+</div>
+
+<p><code class="inline">HandlerCtx</code> is passed by reference and exposes only the kernel notification (<code class="inline">notif</code>) and the supervisor's seccomp listener descriptor (<code class="inline">notif_fd</code>). Supervisor-internal state is deliberately outside this contract; handler state belongs on the implementor.</p>
+
+<h3>Closures</h3>
+
+<p>A blanket implementation covers closures, which is convenient for prototyping or trivial state. Switch to a struct as soon as the handler grows non-trivial captures.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">let</span> audit = <span class="k">move</span> |cx: &amp;HandlerCtx| {
+    <span class="k">let</span> counter = Arc::clone(&amp;counter_clone);
+    <span class="k">let</span> pid = cx.notif.pid;
+    <span class="k">async move</span> {
+        <span class="k">let</span> n = counter.fetch_add(1, Ordering::SeqCst) + 1;
+        <span class="k">eprintln!</span>(<span class="s">"[audit #{n}] pid={pid} openat"</span>);
+        NotifAction::Continue
+    }
+};</code></pre>
+</div>
+
+<h2>Registering</h2>
+
+<p>Two entry points, both of which spawn the sandbox, wait for it to exit, and return the result.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Method</th><th scope="col">stdio</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>run_with_handlers(cmd, handlers)</code></th><td>Captured, returned in the run result</td></tr>
+            <tr><th scope="row"><code>run_interactive_with_handlers(cmd, handlers)</code></th><td>Inherited from the parent terminal, for REPL-like workflows</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">let</span> policy = Sandbox::builder()
+    .fs_read(<span class="s">"/usr"</span>).fs_read(<span class="s">"/lib"</span>).fs_read(<span class="s">"/etc"</span>)
+    .fs_write(<span class="s">"/tmp"</span>)
+    .build()?;
+
+<span class="k">let</span> result = policy.clone().with_name(<span class="s">"openat-audit"</span>)
+    .run_with_handlers(
+        &amp;cmd_ref,
+        [(libc::SYS_openat, audit)],
+    )
+    .<span class="k">await</span>?;</code></pre>
+</div>
+
+<h3>Several handlers at once</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>sandbox.run_with_handlers(
+    &amp;cmd,
+    [
+        (libc::SYS_openat, openat_handler),
+        (libc::SYS_close,  close_handler),
+        (libc::SYS_mmap,   mmap_deny),
+    ],
+).<span class="k">await</span>?;</code></pre>
+</div>
+
+<p>When the iterator mixes handlers of different concrete types, which is the norm in a real downstream crate, erase them behind <code class="inline">Box&lt;dyn Handler&gt;</code> or <code class="inline">Arc&lt;dyn Handler&gt;</code>. Both implement <code class="inline">Handler</code> themselves, so the generic parameter resolves to one type.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">let</span> openat_h: Box&lt;<span class="k">dyn</span> Handler&gt; = Box::new(my_openat_handler);
+<span class="k">let</span> close_h:  Box&lt;<span class="k">dyn</span> Handler&gt; = Box::new(MyCloseStruct { <span class="c">/* ... */</span> });
+
+sandbox.run_with_handlers(
+    &amp;cmd,
+    [(libc::SYS_openat, openat_h), (libc::SYS_close, close_h)],
+).<span class="k">await</span>?;</code></pre>
+</div>
+
+<h3>Registration is validated before fork</h3>
+
+<p>Two classes of error are caught up front, rather than becoming a handler that silently never fires:</p>
+
+<ul>
+    <li><code class="inline">SyscallError::Negative</code> or <code class="inline">SyscallError::UnknownForArch</code> from <code class="inline">Syscall::checked</code>. Without validation, passing <code class="inline">-5</code> as a syscall number would compile and simply never fire, because the cBPF filter cannot emit a comparison for a number the architecture does not know.</li>
+    <li><code class="inline">HandlerError::OnDenySyscall</code> if a registered syscall is in the default blocklist or the policy's extra denials. See <a href="#the-blocklist-bypass-guard">the blocklist bypass guard</a>.</li>
+</ul>
+
+<h3>BPF coverage is merged for you</h3>
+
+<p>Registration collects the syscall numbers your handlers declare and merges them into the cBPF notification list installed in the child before <code class="inline">execve</code>. This step matters: without it the kernel would never raise <code class="inline">SECCOMP_RET_USER_NOTIF</code> for a syscall no built-in intercepts, and your handler would never run. The merge is dedup-aware, so an <code class="inline">openat</code> registered by both a built-in and a user handler produces a single comparison in the assembled program.</p>
+
+<h2>What a handler can return</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Variant</th><th scope="col">Effect</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>Continue</code></th><td>Fall through to the next handler; if last, the kernel resumes the syscall.</td></tr>
+            <tr><th scope="row"><code>Errno(e)</code></th><td>Return <code>-e</code> to the guest. The kernel does not run the syscall.</td></tr>
+            <tr><th scope="row"><code>ReturnValue(val)</code></th><td>Return <code>val</code> to the guest without running the syscall. This is how you synthesize <code>read</code>, <code>fstat</code>, <code>getdents64</code>, and friends.</td></tr>
+            <tr><th scope="row"><code>InjectFd { srcfd, targetfd }</code></th><td>Inject a descriptor into the guest at a specific slot, then continue.</td></tr>
+            <tr><th scope="row"><code>InjectFdSendTracked { srcfd, newfd_flags, on_success }</code></th><td>Inject a descriptor; <code>on_success</code> runs synchronously when the kernel returns the slot, so bookkeeping cannot race the guest seeing the new fd.</td></tr>
+            <tr><th scope="row"><code>Kill { sig, pgid }</code></th><td>Signal the guest's process group.</td></tr>
+            <tr><th scope="row"><code>Defer(Deferred)</code></th><td>Run the carried future off the supervisor loop and send its terminal action later. See <a href="#deferred-handlers">deferred handlers</a>.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>Everything except <code class="inline">Continue</code> ends the chain, so later handlers on the same syscall do not run.</p>
+
+<h2>Reading and writing the guest's memory</h2>
+
+<p>The kernel passes most syscall arguments by pointer: paths in <code class="inline">openat</code>, buffers in <code class="inline">write</code>, the <code class="inline">struct stat</code> slot in <code class="inline">newfstatat</code>. Three helpers in <code class="inline">sandlock_core::seccomp::notif</code> do this correctly.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Helper</th><th scope="col">Purpose</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>read_child_cstr</code></th><td>NUL-terminated string, typically a path. Page-aware, never crosses an unmapped boundary.</td></tr>
+            <tr><th scope="row"><code>read_child_mem</code></th><td>Fixed-length byte buffer.</td></tr>
+            <tr><th scope="row"><code>write_child_mem</code></th><td>Synthesize return data into the guest, such as a fabricated <code>getdents64</code> listing or <code>stat</code> buffer.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>All three bracket the access with notification-id validity checks before and after the <code class="inline">process_vm_readv</code> or <code class="inline">process_vm_writev</code> call, so they cannot race with the kernel aborting or releasing the trapped syscall while the supervisor is reading.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust — deny paths by suffix</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> sandlock_core::seccomp::notif::{read_child_cstr, NotifAction};
+
+<span class="k">struct</span> ExtensionDenyHandler { denied_suffixes: Vec&lt;String&gt; }
+
+<span class="k">impl</span> Handler <span class="k">for</span> ExtensionDenyHandler {
+    <span class="k">fn</span> handle&lt;<span class="s">'a</span>&gt;(
+        &amp;<span class="s">'a</span> <span class="k">self</span>,
+        cx: &amp;<span class="s">'a</span> HandlerCtx,
+    ) -&gt; Pin&lt;Box&lt;<span class="k">dyn</span> Future&lt;Output = NotifAction&gt; + Send + <span class="s">'a</span>&gt;&gt; {
+        Box::pin(<span class="k">async move</span> {
+            <span class="c">// openat(2): args[1] is `const char *pathname`. 4096 = PATH_MAX.</span>
+            <span class="k">let</span> path = <span class="k">match</span> read_child_cstr(cx.notif_fd, cx.notif.id, cx.notif.pid,
+                                             cx.notif.data.args[1], 4096) {
+                Some(p) =&gt; p,
+                <span class="c">// Rare: NULL pointer, or the kernel released the notification</span>
+                <span class="c">// mid-read. Pass through; the kernel usually fails it with EFAULT.</span>
+                None =&gt; <span class="k">return</span> NotifAction::Continue,
+            };
+
+            <span class="k">if</span> <span class="k">self</span>.denied_suffixes.iter().any(|s| path.ends_with(s)) {
+                <span class="k">return</span> NotifAction::Errno(libc::EACCES);
+            }
+            NotifAction::Continue
+        })
+    }
+}</code></pre>
+</div>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>Reading a path safely is not the same as filtering on one safely.</strong> The id bracketing protects the read itself; it does not change the fact that the kernel re-reads user memory after a continue verdict. Keep Landlock as the authoritative layer for path policy, and treat handler-side path inspection as auditing or as a supplementary denial rather than as the boundary. See <a href="/docs/policy.html#no-paths-on-events">why policy events carry no path strings</a>.</p>
+    </div>
+</div>
+
+<h2>Injecting synthetic content</h2>
+
+<p>This is the capability that turns interception into virtualization. A handler can hand the guest a file that exists nowhere on disk: a generated config, a secret, an object fetched from remote storage.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> sandlock_core::seccomp::notif::NotifAction;
+
+<span class="c">// Inside a handler: serve these bytes as the openat result fd.</span>
+<span class="k">return</span> NotifAction::inject_bytes(<span class="s">b"INJECTED CONTENT\n"</span>);</code></pre>
+</div>
+
+<p><code class="inline">inject_bytes</code> creates an in-memory file, populates it, rewinds it, seals it, and returns the inject action carrying that descriptor. It owns the descriptor end to end: the supervisor creates, populates, seals, and closes it, so the caller never touches a raw fd and there is no "when do I close this" question. On allocation failure it collapses to <code class="inline">Errno(EIO)</code>, which is why it returns a <code class="inline">NotifAction</code> directly rather than a <code class="inline">Result</code>.</p>
+
+<p>Two defaults suit the dominant case, which is synthetic and often sensitive read-only content:</p>
+
+<ul>
+    <li><strong>Sealed read-only.</strong> The descriptor carries <code class="inline">F_SEAL_SEAL | F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK</code>, so the guest cannot modify or resize what it is handed. Sealing is best-effort: on a kernel without sealing support the fd is still injected but unsealed, bounded only by the rest of the policy.</li>
+    <li><strong><code class="inline">O_CLOEXEC</code> on the child-side descriptor</strong>, so the content does not leak into programs the guest later executes.</li>
+</ul>
+
+<div class="callout">
+    <i data-lucide="key-round"></i>
+    <div class="callout-body">
+        <p><strong>Why <code class="inline">O_CLOEXEC</code> is the default.</strong> Without it, a subprocess the guest <code class="inline">execve</code>s inherits an open descriptor to the injected content and can read it without ever opening the file. For secret injection that is a silent leak, so <code class="inline">inject_bytes</code> closes the descriptor across <code class="inline">exec</code>.</p>
+    </div>
+</div>
+
+<p>When you are impersonating a real file and want byte-for-byte the semantics the guest asked for, such as a writable descriptor or the guest's own <code class="inline">O_CLOEXEC</code> choice, drop to <code class="inline">content_memfd(content, seal)</code>, which returns an <code class="inline">OwnedFd</code> you pass to <code class="inline">InjectFdSend</code> yourself.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust — mirror the guest's own request</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> sandlock_core::seccomp::notif::{content_memfd, NotifAction};
+
+<span class="k">let</span> fd = <span class="k">match</span> content_memfd(&amp;bytes, <span class="c">/* seal */</span> <span class="k">false</span>) {
+    Ok(fd) =&gt; fd,
+    Err(_) =&gt; <span class="k">return</span> NotifAction::Errno(libc::EIO),
+};
+<span class="k">let</span> cloexec = (cx.notif.data.args[2] <span class="k">as</span> i32 &amp; libc::O_CLOEXEC) != 0;
+NotifAction::InjectFdSend {
+    srcfd: fd,
+    newfd_flags: <span class="k">if</span> cloexec { libc::O_CLOEXEC <span class="k">as</span> u32 } <span class="k">else</span> { 0 },
+}</code></pre>
+</div>
+
+<p>Reach for <code class="inline">InjectFdSendTracked</code> only when you must know the exact descriptor number the kernel assigned in the child, for example to key per-fd bookkeeping. Its <code class="inline">on_success</code> callback delivers that number without racing the guest.</p>
+
+<h2 id="deferred-handlers">Deferred handlers</h2>
+
+<p>The supervisor processes notifications sequentially, so a handler that blocks on a network round trip or a slow lock stalls every other trapped syscall until it returns. <code class="inline">NotifAction::Defer</code> is the escape hatch.</p>
+
+<p>A handler that returns <code class="inline">Defer</code> hands the supervisor an owned <code class="inline">'static</code> future. The supervisor moves it onto a worker task, lets the notification loop proceed immediately, and sends the response, keyed by the notification id, when the future resolves. <strong>The trapped child stays parked in the syscall until then</strong>, so the id stays valid and the child-memory helpers keep working inside the deferred future.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">fn</span> handle&lt;<span class="s">'a</span>&gt;(
+    &amp;<span class="s">'a</span> <span class="k">self</span>,
+    cx: &amp;<span class="s">'a</span> HandlerCtx,
+) -&gt; Pin&lt;Box&lt;<span class="k">dyn</span> Future&lt;Output = NotifAction&gt; + Send + <span class="s">'a</span>&gt;&gt; {
+    <span class="c">// Copy out what the deferred future needs: `notif` is Copy, `notif_fd`</span>
+    <span class="c">// is a RawFd, Arc state is cloned. Never borrow &amp;self or cx — the</span>
+    <span class="c">// deferred future is 'static and outlives this call.</span>
+    <span class="k">let</span> (fd, id, pid) = (cx.notif_fd, cx.notif.id, cx.notif.pid);
+    <span class="k">let</span> key = read_child_cstr(fd, id, pid, cx.notif.data.args[1], 4096);
+    <span class="k">let</span> backend = <span class="k">self</span>.backend.clone();
+    Box::pin(<span class="k">async move</span> {
+        <span class="k">let</span> Some(key) = key <span class="k">else</span> { <span class="k">return</span> NotifAction::Continue };
+        NotifAction::defer(<span class="k">async move</span> {
+            <span class="c">// Runs on a worker, off the supervisor loop. The child is still</span>
+            <span class="c">// parked, so child-memory helpers and `id` are valid here.</span>
+            <span class="k">match</span> backend.get(&amp;key).<span class="k">await</span> {
+                Ok(data) =&gt; NotifAction::inject_bytes(&amp;data),
+                Err(_) =&gt; NotifAction::Errno(libc::EIO),
+            }
+        })
+    })
+}</code></pre>
+</div>
+
+<h3>The contract</h3>
+
+<ul>
+    <li><strong>Terminal decision.</strong> <code class="inline">Defer</code> is non-<code class="inline">Continue</code>, so it short-circuits the chain exactly like <code class="inline">Errno</code>. A deferring handler decides the outcome.</li>
+    <li><strong>No deferral on freeze or fork syscalls.</strong> Refused with <code class="inline">EPERM</code> on <code class="inline">execve</code>, <code class="inline">execveat</code>, and fork-creating syscalls, because moving the response off-loop would skip the argv-safety freeze and the process creation-tracking those paths require before continuing.</li>
+    <li><strong>Bounded fan-out.</strong> At most <code class="inline">DEFER_MAX_INFLIGHT</code> deferred futures run concurrently; beyond that, further deferrals fail fast with <code class="inline">EAGAIN</code> rather than queuing. The cap also bounds the resources workers hold.</li>
+    <li><strong>No nesting.</strong> A deferred future that itself resolves to <code class="inline">Defer</code> is a bug; the supervisor collapses it to <code class="inline">EIO</code> so the child is never left wedged.</li>
+    <li><strong>Stale id.</strong> If the child exits mid-defer, the eventual response is a no-op and the child-memory helpers fail safe.</li>
+</ul>
+
+<p>Do not defer trivial fast handlers: the worker hop adds latency. Defer only when the work would otherwise block the loop.</p>
+
+<h2>Continue-site safety</h2>
+
+<p>Because the response sent for one notification gates the kernel's resumption of that trapped syscall, a handler must never leave the loop waiting on itself.</p>
+
+<p>Concretely: <strong>never hold a <code class="inline">tokio::sync::Mutex</code> or <code class="inline">RwLock</code> guard across an <code class="inline">.await</code> inside a handler.</strong> If the guard is alive when control returns to the supervisor loop, the next notification that needs the same lock parks, the response for the current notification is never sent, and the child stays trapped in the syscall forever. Acquire, mutate, drop, and only then await.</p>
+
+<p>For work that is genuinely slow rather than a short critical section, do not block the loop at all: return <code class="inline">Defer</code>.</p>
+
+<p>Today's dispatch is largely serial, but treat that as an implementation detail rather than a contract. The trait already requires <code class="inline">Send + Sync</code>, and the C ABI requires the user-data pointer to be thread-safe, precisely so a future dispatcher can parallelize without an ABI break.</p>
+
+<h3>State patterns</h3>
+
+<p><code class="inline">handle</code> takes <code class="inline">&amp;self</code>, so anything mutated needs interior mutability. Pick by access pattern:</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Pattern</th><th scope="col">Use when</th><th scope="col">Example</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>AtomicU64</code> / <code>AtomicUsize</code></th><td>Counter or single value, lock-free</td><td>Audit call count</td></tr>
+            <tr><th scope="row"><code>parking_lot::Mutex&lt;T&gt;</code></th><td>Short critical section, never crosses <code>.await</code></td><td>Append to a <code>Vec&lt;Event&gt;</code> log buffer</td></tr>
+            <tr><th scope="row"><code>tokio::sync::RwLock&lt;T&gt;</code></th><td>Read-heavy, rebuilt occasionally</td><td>A small virtual file table refreshed on change</td></tr>
+            <tr><th scope="row"><code>dashmap::DashMap&lt;K, V&gt;</code></th><td>High-fanout per-key concurrent access</td><td>Per-pid open-file table keyed by <code>(pid, fd)</code></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>A synchronous <code class="inline">parking_lot::Mutex</code> is the safer default for short critical sections precisely because it <em>cannot</em> be held across an <code class="inline">.await</code>, and so cannot deadlock the supervisor loop.</p>
+
+<h2>The security boundary</h2>
+
+<p>User handlers run after built-ins. By the time one observes a notification, the built-ins have already normalized paths for chroot, applied the Landlock pre-checks, and short-circuited anything conflicting with the policy.</p>
+
+<div class="claims-two">
+    <div class="claim-box can">
+        <h3><i data-lucide="check-check"></i>A handler can</h3>
+        <ul>
+            <li>Observe every syscall Sandlock intercepts, provided the built-ins for that syscall returned <em>continue</em>.</li>
+            <li>Fake results with <code class="inline">ReturnValue</code> or <code class="inline">Errno</code>, again only after the built-ins continued.</li>
+            <li>Inject descriptors to materialize virtual file content without touching the host filesystem.</li>
+        </ul>
+    </div>
+    <div class="claim-box cannot">
+        <h3><i data-lucide="shield-off"></i>A handler cannot</h3>
+        <ul>
+            <li>Remove a built-in handler.</li>
+            <li>Reorder itself to run before a built-in.</li>
+            <li>Skip a built-in's <code class="inline">Errno</code>, <code class="inline">ReturnValue</code>, or <code class="inline">Kill</code> response.</li>
+        </ul>
+    </div>
+</div>
+
+<p>The ordering is enforced structurally, not by convention: the dispatch table registers built-ins into an empty table <em>before</em> iterating user handlers, and the chain evaluator short-circuits on the first non-continue result. It is covered by unit tests against the dispatch walker and by end-to-end tests driving a live Landlock and seccomp sandbox.</p>
+
+<h3 id="the-blocklist-bypass-guard">The blocklist bypass guard</h3>
+
+<p>This one is worth understanding, because it closes a hole that would otherwise be easy to open by accident.</p>
+
+<p>The cBPF program emits notification comparisons <em>before</em> deny comparisons, so a syscall present in both lists reaches <code class="inline">SECCOMP_RET_USER_NOTIF</code> first. That means a handler registered on a syscall in the default blocklist would convert a kernel-level deny into a user-supervised path, and a handler returning <em>continue</em> would become <code class="inline">SECCOMP_USER_NOTIF_FLAG_CONTINUE</code> — the kernel would actually run the syscall, <strong>silently bypassing the deny</strong>.</p>
+
+<p>Sandlock rejects that configuration at registration time with <code class="inline">HandlerError::OnDenySyscall</code>, covering both the default blocklist and the policy's <code class="inline">extra_deny_syscalls</code>. Because Sandlock always installs its default blocklist, this guard is always active.</p>
+
+<h2>Panics</h2>
+
+<p>Handler calls are not wrapped in <code class="inline">catch_unwind</code>. A panic inside a handler propagates up the task driving the supervisor, and the child is killed by the watchdog. To tolerate bugs in a downstream handler, wrap it, using the futures crate's <code class="inline">catch_unwind</code> rather than the synchronous <code class="inline">std::panic::catch_unwind</code>, which does not apply to async futures.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">rust</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">use</span> std::panic::AssertUnwindSafe;
+<span class="k">use</span> futures::future::FutureExt <span class="k">as</span> _;
+
+<span class="k">struct</span> PanicSafe&lt;H: Handler&gt;(H);
+
+<span class="k">impl</span>&lt;H: Handler&gt; Handler <span class="k">for</span> PanicSafe&lt;H&gt; {
+    <span class="k">fn</span> handle&lt;<span class="s">'a</span>&gt;(
+        &amp;<span class="s">'a</span> <span class="k">self</span>,
+        cx: &amp;<span class="s">'a</span> HandlerCtx,
+    ) -&gt; Pin&lt;Box&lt;<span class="k">dyn</span> Future&lt;Output = NotifAction&gt; + Send + <span class="s">'a</span>&gt;&gt; {
+        Box::pin(<span class="k">async move</span> {
+            AssertUnwindSafe(<span class="k">self</span>.0.handle(cx))
+                .catch_unwind()
+                .<span class="k">await</span>
+                .unwrap_or(NotifAction::Continue) <span class="c">// fail open on panic</span>
+        })
+    }
+}</code></pre>
+</div>
+
+<h2>What people build with this</h2>
+
+<h3>A virtual filesystem that streams to object storage</h3>
+
+<p>Streaming guest-generated artifacts to object storage <em>as the process runs</em>, rather than collecting them after it exits, needs interceptors on <code class="inline">openat(O_CREAT)</code>, <code class="inline">write</code>, and <code class="inline">close</code> that translate filesystem operations into multipart-upload calls.</p>
+
+<p>Those uploads are slow network operations, so the handlers return <code class="inline">Defer</code> and the uploads run off the notification loop. Each handler observes the post-built-in view, so by the time it runs the <code class="inline">openat</code> arguments are already chroot-normalized and the path can be trusted against the configured policy.</p>
+
+<h3>A tamper-proof audit trail</h3>
+
+<p>Regulated environments need a guaranteed log of every file read and write the guest performs. Python-level wrappers such as import hooks are trivial for the guest to circumvent through <code class="inline">ctypes</code> or raw syscalls, and eBPF file tracing needs <code class="inline">CAP_BPF</code>, which is often unavailable in managed Kubernetes.</p>
+
+<p>A handler on <code class="inline">openat</code>, <code class="inline">write</code>, and <code class="inline">unlinkat</code> captures the call before the kernel acts on it. <strong>The guest cannot bypass it without bypassing seccomp itself</strong>, which Sandlock blocks at the BPF level. A runnable example lives at <code class="inline">crates/sandlock-core/examples/openat_audit.rs</code>.</p>
+
+<h3>Virtual files with no host backing</h3>
+
+<p>A read-only virtual file, whether <code class="inline">/etc/hostname</code> or a configuration generated per call, is exposed by intercepting <code class="inline">openat</code> and injecting a sealed in-memory file. The guest reads the content normally and no host filesystem is touched.</p>
+
+<h2>Limitations</h2>
+
+<ul>
+    <li><strong>No built-in override.</strong> Security-critical handlers such as chroot and COW always run first. Changing their behaviour means modifying Sandlock itself.</li>
+    <li><strong>No before-built-in priority.</strong> An audit handler that wants to observe calls the built-ins rejected is a coherent use case, but it needs a handler-priority concept that does not exist yet; the current API only appends to the chain.</li>
+    <li><strong>Not part of the policy.</strong> Registering handlers is a runtime action, not a serializable part of a policy. <code class="inline">Policy</code> stays a pure data struct, which is why handlers never appear in a TOML profile.</li>
+</ul>
+
+<h2>Other languages</h2>
+
+<p>The same handler model is available beyond Rust.</p>
+
+<p><strong>Python</strong> wraps it in <code class="inline">sandlock.handler</code>, with <code class="inline">Handler</code>, <code class="inline">HandlerCtx</code>, <code class="inline">NotifAction</code>, and an <code class="inline">ExceptionPolicy</code> for what happens when a handler raises, plus ready-made presets for auditing and path allow/deny lists. See <a href="/docs/policy.html#custom-handlers">custom handlers in Python</a>.</p>
+
+<p><strong>C and any language with a C FFI</strong> go through the <code class="inline">sandlock-ffi</code> shared library, whose header declares the same model. The callback contract is strict and worth reading before writing one: return zero exactly when you have called one, and only one, of the action setters; return non-zero on internal error, at which point the supervisor applies your configured exception policy; and never retain the notification, memory-handle, or action-output pointers past the return statement. Because the supervisor may invoke a C callback from multiple worker threads, <strong>the caller must ensure their user-data pointer is thread-safe</strong> — Rust offers no synchronization for an opaque <code class="inline">void*</code>.</p>
+
+<p>The C counterpart of <code class="inline">inject_bytes</code> takes a flags bitmask whose zero value is the safe default, sealed read-only with <code class="inline">O_CLOEXEC</code>; <code class="inline">SANDLOCK_INJECT_WRITABLE</code> and <code class="inline">SANDLOCK_INJECT_NO_CLOEXEC</code> opt out. The supervisor copies your data during the call and owns the resulting descriptor, so the caller passes no fd and frees nothing.</p>

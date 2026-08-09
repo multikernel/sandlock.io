@@ -158,132 +158,32 @@ confine(&amp;confinement)?;</code></pre>
 
 <p>See <a href="/docs/policy.html">Dynamic Policy</a> for the event fields, the verdict semantics, and why path strings are never exposed.</p>
 
-<h2 id="custom-handlers">Custom handlers</h2>
+<h2 id="custom-handlers">Extension handlers</h2>
 
-<p><code class="inline">sandlock-core</code> routes every intercepted syscall through a chain-of-responsibility table. Built-in handlers (chroot, COW, procfs, network, port remap, resource accounting) register for the syscall numbers they care about; within a chain, handlers run in registration order and the first non-<code class="inline">Continue</code> result wins.</p>
-
-<p><code class="inline">Handler</code> is the public extension trait that appends your handlers <strong>after all built-ins</strong>. This is the supported alternative to forking the crate: one <code class="inline">SECCOMP_FILTER_FLAG_NEW_LISTENER</code> per process means one supervisor task, so code that needs to intercept extra syscalls in the same sandbox has to run inside the same dispatch loop.</p>
-
-<h3>Implementing the trait</h3>
-
-<p>The trait has a single method returning a boxed future, kept dyn-compatible so the supervisor can store handlers as <code class="inline">Vec&lt;Arc&lt;dyn Handler&gt;&gt;</code>. State lives on the struct's fields, which avoids <code class="inline">Arc::clone</code> ladders and closure ceremony at the call site.</p>
+<p>Handlers are the layer where the sandbox stops being a policy you declare and becomes one you program. Your code runs inside the supervisor, registered on any syscall you choose, and decides what the workload observes: deny it, fabricate a return value, hand it a file that exists nowhere on disk, or park the call while you consult a remote service.</p>
 
 <div class="code-block">
     <div class="code-block-header">
         <span class="code-block-title">rust</span>
         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
     </div>
-<pre><code><span class="k">use</span> std::future::Future;
-<span class="k">use</span> std::pin::Pin;
-<span class="k">use</span> std::sync::atomic::{AtomicU64, Ordering};
-<span class="k">use</span> sandlock_core::{Handler, HandlerCtx, Sandbox};
-<span class="k">use</span> sandlock_core::seccomp::notif::NotifAction;
-
-<span class="k">struct</span> OpenAudit { count: AtomicU64 }
-
-<span class="k">impl</span> Handler <span class="k">for</span> OpenAudit {
-    <span class="k">fn</span> handle&lt;<span class="s">'a</span>&gt;(
-        &amp;<span class="s">'a</span> <span class="k">self</span>,
-        cx: &amp;<span class="s">'a</span> HandlerCtx,
-    ) -&gt; Pin&lt;Box&lt;<span class="k">dyn</span> Future&lt;Output = NotifAction&gt; + Send + <span class="s">'a</span>&gt;&gt; {
-        Box::pin(<span class="k">async move</span> {
-            <span class="k">let</span> n = <span class="k">self</span>.count.fetch_add(1, Ordering::SeqCst) + 1;
-            <span class="k">eprintln!</span>(<span class="s">"[audit #{n}] pid={} openat"</span>, cx.notif.pid);
-            NotifAction::Continue
-        })
+<pre><code><span class="k">let</span> audit = <span class="k">move</span> |cx: &amp;HandlerCtx| {
+    <span class="k">let</span> pid = cx.notif.pid;
+    <span class="k">async move</span> {
+        <span class="k">eprintln!</span>(<span class="s">"openat from pid {pid}"</span>);
+        NotifAction::Continue
     }
-}
-
-<span class="k">let mut</span> sandbox = Sandbox::builder()
-    .fs_read(<span class="s">"/usr"</span>).fs_write(<span class="s">"/tmp"</span>)
-    .build()?;
-
-sandbox.run_with_handlers(
-    &amp;[<span class="s">"python3"</span>, <span class="s">"-c"</span>, <span class="s">"print(42)"</span>],
-    [(libc::SYS_openat, OpenAudit { count: AtomicU64::new(0) })],
-).<span class="k">await</span>?;</code></pre>
-</div>
-
-<p><code class="inline">HandlerCtx</code> is passed by reference and exposes only the kernel notification (<code class="inline">notif</code>) and the supervisor's seccomp listener descriptor (<code class="inline">notif_fd</code>). Supervisor-internal state is deliberately outside this contract; handler state belongs on the implementor.</p>
-
-<h3>Closures</h3>
-
-<p>A blanket implementation covers closures, which is convenient for prototyping. Switch to a struct as soon as the handler grows non-trivial captures.</p>
-
-<div class="code-block">
-    <div class="code-block-header">
-        <span class="code-block-title">rust</span>
-        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
-    </div>
-<pre><code><span class="k">let</span> audit = |cx: &amp;HandlerCtx| <span class="k">async move</span> {
-    <span class="k">eprintln!</span>(<span class="s">"openat from pid {}"</span>, cx.notif.pid);
-    NotifAction::Continue
 };
 
-sandbox.run_with_handlers(&amp;cmd, [(libc::SYS_openat, audit)]).<span class="k">await</span>?;</code></pre>
+<span class="k">let</span> result = sandbox
+    .run_with_handlers(&amp;cmd, [(libc::SYS_openat, audit)])
+    .<span class="k">await</span>?;</code></pre>
 </div>
 
-<h3>Validated syscall numbers</h3>
+<p>The built-in chain always runs first, so a handler can extend confinement but never subvert it, and registering on a blocklisted syscall is rejected before fork rather than silently opening a bypass.</p>
 
-<p><code class="inline">Syscall::checked(nr)</code> validates a number against the architecture's known syscall set and rejects negatives. This matters more than it looks: without validation, passing <code class="inline">-5</code> as a syscall number would compile fine and simply never fire, because the cBPF filter cannot emit a comparison for a number the architecture does not know.</p>
+<p>The full API — the trait, the complete set of return actions, reading and writing guest memory, injecting synthetic file content, deferring slow work off the supervisor loop, continue-site safety, and the security boundary — is covered on <a href="/docs/handlers.html">Extension Handlers</a>.</p>
 
-<div class="code-block">
-    <div class="code-block-header">
-        <span class="code-block-title">rust</span>
-        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
-    </div>
-<pre><code><span class="k">use</span> sandlock_core::{Syscall, SyscallError};
-
-<span class="k">assert</span>!(Syscall::checked(libc::SYS_openat).is_ok());
-<span class="k">assert</span>!(<span class="k">matches!</span>(Syscall::checked(-5), Err(SyscallError::Negative(-5))));
-<span class="k">assert</span>!(<span class="k">matches!</span>(Syscall::checked(99_999), Err(SyscallError::UnknownForArch(99_999))));</code></pre>
-</div>
-
-<p><code class="inline">run_with_handlers</code> accepts anything convertible into a <code class="inline">Syscall</code>, so raw numbers are validated up front rather than silently ignored later.</p>
-
-<h3>Reading syscall arguments</h3>
-
-<p>The kernel passes most syscall arguments by pointer: paths in <code class="inline">openat</code>, buffers in <code class="inline">write</code>, the <code class="inline">struct stat</code> slot in <code class="inline">newfstatat</code>. Reading them out of guest memory requires care, so <code class="inline">sandlock_core::seccomp::notif</code> provides helpers that do it correctly.</p>
-
-<div class="data-table-wrap">
-    <table class="data-table">
-        <thead>
-            <tr><th scope="col">Helper</th><th scope="col">Purpose</th></tr>
-        </thead>
-        <tbody>
-            <tr><th scope="row"><code>read_child_cstr</code></th><td>NUL-terminated string, typically a path. Page-aware, never crosses an unmapped boundary.</td></tr>
-            <tr><th scope="row"><code>read_child_mem</code></th><td>Fixed-length byte buffer.</td></tr>
-            <tr><th scope="row"><code>write_child_mem</code></th><td>Synthesize return data into the guest, for example a fabricated <code>getdents64</code> listing or <code>stat</code> buffer.</td></tr>
-        </tbody>
-    </table>
-</div>
-
-<p>All three bracket the access with notification-id validity checks before and after the <code class="inline">process_vm_readv</code> or <code class="inline">process_vm_writev</code> call, so they cannot race with the kernel aborting or releasing the trapped syscall while the supervisor is reading.</p>
-
-<div class="callout warn">
-    <i data-lucide="triangle-alert"></i>
-    <div class="callout-body">
-        <p><strong>Reading a path safely is not the same as filtering on one safely.</strong> The bracketing protects the read; it does not change the fact that the kernel re-reads user memory after a continue verdict. Keep Landlock as the authoritative layer for path policy, and treat handler-side path inspection as auditing or as a supplementary denial, not as the boundary. See <a href="/docs/policy.html#no-paths-on-events">why events carry no path strings</a>.</p>
-    </div>
-</div>
-
-<h3>Entry points and constraints</h3>
-
-<div class="data-table-wrap">
-    <table class="data-table">
-        <thead>
-            <tr><th scope="col">Method</th><th scope="col">stdio</th></tr>
-        </thead>
-        <tbody>
-            <tr><th scope="row"><code>run_with_handlers(cmd, handlers)</code></th><td>Captured, returned in the run result</td></tr>
-            <tr><th scope="row"><code>run_interactive_with_handlers(cmd, handlers)</code></th><td>Inherited from the parent terminal</td></tr>
-        </tbody>
-    </table>
-</div>
-
-<p>Two rules keep handlers from becoming an escape hatch. <strong>The built-in chain always runs first</strong>, so a user handler cannot reverse a decision the built-ins made. And <strong>registration is validated</strong>: a handler on a syscall in the default blocklist, or in the policy's extra denials, is rejected at registration rather than silently never firing.</p>
-
-<p>Deferral is also refused, with <code class="inline">EPERM</code>, on freeze and fork syscalls, because deferring those would break the argv-safety freeze and the process creation-tracking those paths depend on.</p>
 
 <h2>Protection posture</h2>
 

@@ -20,6 +20,8 @@ groups:
         title: HTTP ACL and Credentials
       - url: /docs/policy.html
         title: Dynamic Policy
+      - url: /docs/handlers.html
+        title: Extension Handlers
       - url: /docs/profiles.html
         title: Profiles and learn
 

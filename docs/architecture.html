@@ -186,7 +186,7 @@ lede: "Sandlock is a policy applied to a process, not a runtime the process live
     <li><strong>Registration is validated.</strong> Handlers on syscalls in the default blocklist, or in the policy's extra denials, are rejected at registration time rather than silently never firing.</li>
 </ul>
 
-<p>See <a href="/docs/rust.html#custom-handlers">the Rust API guide</a> for the handler API, ordering semantics, and state patterns.</p>
+<p>This is the extension point that makes the sandbox programmable rather than merely configurable: a handler can deny a syscall, fabricate its return value, hand the guest a file that exists nowhere on disk, or defer slow work off the supervisor loop. See <a href="/docs/handlers.html">Extension Handlers</a> for the full API, ordering semantics, injection, and the security boundary.</p>
 
 <h2>Host requirements</h2>
 

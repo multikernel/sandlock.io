@@ -224,4 +224,4 @@ sb.run_with_handlers(
 
 <p>The memory accessors bracket every read and write with validity checks on the notification id, so they cannot race with the kernel aborting or releasing the trapped syscall while the supervisor is reading the child's memory. That protects the read itself; it does not change the fact that a decision made on a path string is subject to the re-read described <a href="#no-paths-on-events">above</a>, so keep Landlock as the authoritative layer for path policy.</p>
 
-<p>The Rust handler API, including its ordering semantics and state patterns, is covered in <a href="/docs/rust.html#custom-handlers">the Rust API guide</a>.</p>
+<p>The Rust handler API, including the complete set of return actions, guest-memory access, content injection, deferred handlers, and the security boundary, is covered on <a href="/docs/handlers.html">Extension Handlers</a>.</p>

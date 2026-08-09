@@ -176,6 +176,10 @@ permalink: /
                     <i data-lucide="container"></i>
                     <span>OCI runtime for Kubernetes</span>
                 </div>
+                <div class="trust-feature">
+                    <i data-lucide="blocks"></i>
+                    <span>Programmable interception</span>
+                </div>
             </div>
         </div>
     </div>
@@ -331,6 +335,61 @@ permalink: /
                 <i data-lucide="arrow-right"></i>
                 Read the architecture
             </a>
+        </div>
+    </div>
+</section>
+
+<!-- Programmable -->
+<section class="section section-alt" id="programmable">
+    <div class="section-container">
+        <div class="value-content">
+            <div class="value-text">
+                <div class="section-badge">
+                    <i data-lucide="blocks"></i>
+                    <span>Programmable</span>
+                </div>
+                <h2 class="section-title">A Sandbox You Can Program, Not Just Configure</h2>
+                <p class="section-subtitle">Every policy on this page is declarative. Handlers are the layer underneath: your own code runs inside the supervisor, registered on any syscall you choose, and decides what the workload actually observes.</p>
+
+                <div class="capability-features" style="margin-top: var(--space-6);">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Deny, or fabricate a result.</strong> Return an errno, or a value the syscall never produced.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Serve files that do not exist.</strong> Hand the guest a sealed in-memory file: a generated config, a secret, an object fetched from storage. No host filesystem involved.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Do slow work without stalling.</strong> Defer a call to a worker, park the guest, and answer when your backend replies.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Audit that the guest cannot evade.</strong> Interception sits below the language runtime, so <code class="inline">ctypes</code> and raw syscalls do not route around it.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Extend confinement, never weaken it.</strong> Built-ins always run first, and registering on a blocklisted syscall is rejected before fork.</span></div>
+                </div>
+
+                <div class="value-cta">
+                    <a href="/docs/handlers.html" class="btn-link">
+                        Read the handler API
+                        <i data-lucide="arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="value-visual" style="align-items: flex-start;">
+                <div class="code-block" style="width: 100%; margin: 0;">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Audit every open, from your own crate</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="k">use</span> sandlock_core::{HandlerCtx, Sandbox};
+<span class="k">use</span> sandlock_core::seccomp::notif::NotifAction;
+
+<span class="k">let</span> audit = <span class="k">move</span> |cx: &amp;HandlerCtx| {
+    <span class="k">let</span> pid = cx.notif.pid;
+    <span class="k">async move</span> {
+        <span class="k">eprintln!</span>(<span class="s">"openat from pid {pid}"</span>);
+        <span class="c">// Continue = fall through to the kernel.</span>
+        NotifAction::Continue
+    }
+};
+
+<span class="k">let</span> result = sandbox
+    .run_with_handlers(&amp;cmd, [(libc::SYS_openat, audit)])
+    .<span class="k">await</span>?;</code></pre>
+                </div>
+            </div>
         </div>
     </div>
 </section>

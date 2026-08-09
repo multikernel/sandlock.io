@@ -317,6 +317,58 @@ result = (
     </div>
 </section>
 
+<section class="usecase" id="programmable">
+    <div class="section-container">
+        <div class="usecase-grid">
+            <div class="usecase-body">
+                <h2>Compliance Audit and Virtual Filesystems</h2>
+                <p>Some requirements cannot be met by any declarative policy. A regulated environment needs a guaranteed record of every file the guest read or wrote, and it has to be one the guest cannot evade. A data platform may need artifacts streamed to object storage <em>as they are written</em>, not collected after the process exits.</p>
+                <p>Handlers cover both. Your code runs inside the supervisor, registered on whichever syscalls you care about, and sees each call before the kernel acts on it. <strong>Because interception sits below the language runtime, an audit trail built this way cannot be routed around by <code class="inline">ctypes</code>, a raw syscall, or a rewritten import hook</strong> — evading it would mean evading seccomp, which Sandlock blocks at the BPF level. Compare eBPF file tracing, which needs <code class="inline">CAP_BPF</code> and is often unavailable on managed Kubernetes.</p>
+
+                <div class="usecase-points">
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Files with no host backing.</strong> Intercept <code class="inline">openat</code> and hand back a sealed in-memory file: a per-call config, a secret, a remote object.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Slow work without stalling.</strong> A handler doing a network round trip defers to a worker; the guest stays parked on that one call while everything else proceeds.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Confinement is never weakened.</strong> Built-ins run first, and a handler registered on a blocklisted syscall is rejected before fork rather than silently converting a kernel deny into an allow.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Rust, Python, or C.</strong> The same handler model is exposed through the C ABI, so any language that can call C can supply one.</span></div>
+                </div>
+
+                <div class="who">
+                    <span class="mono-label">Why it has to live here</span>
+                    <p>The kernel allows one seccomp notification listener per process. Code that wants to intercept extra syscalls in the same sandbox must run inside the same supervisor loop, which is exactly what the <a href="/docs/handlers.html">handler API</a> provides without forking Sandlock.</p>
+                </div>
+            </div>
+
+            <div class="usecase-aside">
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span class="code-block-title">Python: deny by pattern, audit the rest</span>
+                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+                    </div>
+<pre><code><span class="k">import</span> sandlock
+<span class="k">from</span> sandlock.presets <span class="k">import</span> (
+    AuditPathsHandler, PathDenyHandler, COMMON_PATH_SYSCALLS,
+)
+
+audit = AuditPathsHandler(
+    callback=<span class="k">lambda</span> path, _ctx: log.info(<span class="s">"open %s"</span>, path)
+)
+deny = PathDenyHandler(deny=[<span class="s">"*/.ssh/*"</span>, <span class="s">"*/.aws/*"</span>])
+
+sb = sandlock.Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>],
+    fs_writable=[<span class="s">"/work"</span>],
+)
+sb.run_with_handlers(
+    cmd=[<span class="s">"python3"</span>, <span class="s">"task.py"</span>],
+    handlers=[(s, deny) <span class="k">for</span> s <span class="k">in</span> COMMON_PATH_SYSCALLS]
+           + [(s, audit) <span class="k">for</span> s <span class="k">in</span> COMMON_PATH_SYSCALLS],
+)</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <section class="usecase" id="kubernetes">
     <div class="section-container">
         <div class="usecase-grid">
