@@ -1605,6 +1605,44 @@ code.inline,
     color: var(--accent-400);
 }
 
+/* Flex and grid children default to min-width:auto, which refuses to shrink
+   below their own content. One code block or one long identifier then makes
+   the whole page wider than a phone, so opt every layout container's children
+   out of that. */
+.hero-container,
+.value-content > *,
+.cards-grid > *,
+.features-grid > *,
+.steps-grid > *,
+.hero-stats > *,
+.footer-main > *,
+.interfaces-grid > *,
+.pillars > *,
+.usecase-grid > *,
+.layer > *,
+.layer-row > *,
+.path-grid > *,
+.alt-grid > *,
+.not-for > *,
+.boundary-grid > *,
+.claims > *,
+.claim-row > *,
+.cap-grid > *,
+.fit-grid > * {
+    min-width: 0;
+}
+
+/* A long identifier is a single unbreakable token. Let inline code wrap
+   instead of widening the page; code inside <pre> keeps its formatting and
+   scrolls inside its own box. */
+code {
+    overflow-wrap: anywhere;
+}
+
+pre code {
+    overflow-wrap: normal;
+}
+
 /* ===== UTILITIES ===== */
 .mono-label {
     font-family: var(--font-mono);

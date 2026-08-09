@@ -12,6 +12,13 @@
     align-items: start;
 }
 
+.docs-shell > *,
+.claims-two > *,
+.docs-index-grid > *,
+.docs-pager > * {
+    min-width: 0;
+}
+
 /* --- Left: section nav --- */
 .docs-sidebar {
     position: sticky;
