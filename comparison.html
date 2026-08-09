@@ -8,49 +8,65 @@ permalink: /comparison.html
 <style>
 .alt-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: var(--space-5);
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
     margin-top: var(--space-8);
 }
 
+@media (max-width: 880px) {
+    .alt-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .alt-card {
-    padding: var(--space-8);
+    padding: var(--space-6) var(--space-7);
     background: white;
     border: 1px solid var(--gray-200);
-    border-top: 2px solid var(--gray-300);
+    border-left: 3px solid var(--gray-300);
     border-radius: var(--radius-lg);
 }
 
 .alt-card h3 {
-    font-size: var(--text-lg);
+    font-size: var(--text-base);
     font-weight: 700;
     color: var(--gray-900);
-    letter-spacing: -0.02em;
-    margin-bottom: var(--space-2);
+    letter-spacing: -0.01em;
 }
 
-.alt-card .verdict {
+.alt-card .what {
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: var(--gray-500);
+    margin: var(--space-1) 0 var(--space-5);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.alt-card dt {
     font-family: var(--font-mono);
     font-size: 10px;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--accent-700);
-    display: block;
-    margin-bottom: var(--space-4);
+    color: var(--gray-400);
+    margin-bottom: var(--space-1);
 }
 
-.alt-card p {
+.alt-card dd {
     font-size: var(--text-sm);
     line-height: var(--leading-relaxed);
     color: var(--gray-600);
+    margin-bottom: var(--space-4);
 }
 
-.alt-card p + p {
-    margin-top: var(--space-3);
+.alt-card dd:last-child {
+    margin-bottom: 0;
 }
 
 .alt-card strong {
     color: var(--gray-900);
+    font-weight: 600;
 }
 
 .alt-card a {
@@ -64,6 +80,7 @@ permalink: /comparison.html
     color: var(--accent-600);
     text-decoration-color: var(--accent-500);
 }
+
 
 .not-for {
     display: grid;
@@ -201,37 +218,53 @@ permalink: /comparison.html
                 <i data-lucide="scale"></i>
                 <span>Adjacent tools</span>
             </div>
-            <h2 class="section-title">How It Compares to the Neighbours</h2>
-            <p class="section-subtitle">Sandlock overlaps with several well-established tools. Here is where the overlap ends.</p>
+            <h2 class="section-title">Overlap With Related Tools</h2>
+            <p class="section-subtitle">Each solves part of the same problem. This is where the overlap ends, and which tool to reach for instead.</p>
         </div>
 
         <div class="alt-grid">
             <div class="alt-card">
                 <h3>gVisor</h3>
-                <span class="verdict">Different boundary, different cost</span>
-                <p>gVisor puts a userspace kernel between the workload and the host, implementing the Linux syscall surface itself. That is a genuinely strong boundary, and it is the right answer when you need to run a full untrusted operating-system image.</p>
-                <p>The cost is that <strong>every syscall is serviced by the Sentry</strong>, and application compatibility depends on how completely the Sentry reimplements the interface. Sandlock leaves the host kernel in the syscall path and only intercepts the small set of calls that carry policy decisions, which is why a Redis workload keeps 97% of its bare-metal throughput.</p>
+                <p class="what">A userspace kernel that reimplements the Linux syscall interface.</p>
+                <dl>
+                    <dt>Difference</dt>
+                    <dd><strong>Every syscall is serviced by the Sentry</strong>, and compatibility depends on how completely it reimplements the interface. Sandlock leaves the host kernel in the syscall path and intercepts only the calls that carry a policy decision.</dd>
+                    <dt>Prefer gVisor when</dt>
+                    <dd>You are running a full untrusted OS image and can absorb the per-syscall cost.</dd>
+                </dl>
             </div>
 
             <div class="alt-card">
                 <h3>bubblewrap and firejail</h3>
-                <span class="verdict">Same spirit, different mechanism</span>
-                <p>These build a confined view of the system out of mount, PID, and user namespaces. They are unprivileged (given user namespaces) and fast, and for desktop application sandboxing they are excellent.</p>
-                <p>Sandlock differs in that the policy is <strong>an access-control ruleset rather than a constructed namespace</strong>, so there is no filesystem to assemble and no user-namespace requirement. It also covers ground namespaces do not: destination-IP allowlisting, HTTP method and path rules, credential injection, copy-on-write commit and rollback, and a programmable per-syscall policy callback.</p>
+                <p class="what">Confinement assembled from mount, PID, and user namespaces.</p>
+                <dl>
+                    <dt>Difference</dt>
+                    <dd>Sandlock's policy is <strong>an access-control ruleset, not a constructed namespace</strong>, so there is no filesystem to assemble and no user-namespace requirement. It also covers ground namespaces do not: destination-IP allowlists, HTTP method and path rules, credential injection, and copy-on-write rollback.</dd>
+                    <dt>Prefer them when</dt>
+                    <dd>You are sandboxing desktop applications, where a private namespace view is itself the goal.</dd>
+                </dl>
             </div>
 
             <div class="alt-card">
-                <h3>seccomp filters you write yourself</h3>
-                <span class="verdict">The layer below</span>
-                <p>A hand-written seccomp-bpf filter is precise and free, and Sandlock uses exactly that as one of its layers. What a raw filter cannot do is inspect arguments that live behind a pointer, because the kernel re-reads user memory after the filter runs.</p>
-                <p>That is why <strong>path-based decisions belong in Landlock</strong> and destination-based decisions belong in the supervisor, where the socket can be duplicated and inspected safely. Sandlock's job is to assemble these pieces so the combination is sound rather than plausible-looking.</p>
+                <h3>Hand-written seccomp filters</h3>
+                <p class="what">The layer Sandlock builds on. Precise, and free at runtime.</p>
+                <dl>
+                    <dt>Difference</dt>
+                    <dd>A raw filter <strong>cannot inspect an argument behind a pointer</strong>, because the kernel re-reads user memory after the filter runs. Sandlock puts path decisions in Landlock and destination decisions in a supervisor that duplicates the socket, so the combination is sound rather than plausible-looking.</dd>
+                    <dt>Prefer a raw filter when</dt>
+                    <dd>You need one narrow syscall restriction and nothing else.</dd>
+                </dl>
             </div>
 
             <div class="alt-card">
-                <h3>Kubernetes with runc</h3>
-                <span class="verdict">Not either/or</span>
-                <p>If your workloads already ship as OCI images, Sandlock does not ask you to leave that behind. <code class="inline">sandlock-oci</code> implements the OCI runtime interface, so containerd, CRI-O, and the kubelet can drive it in place of <code class="inline">runc</code>.</p>
-                <p>What changes is the enforcement: the result is a <strong>namespace-less, cgroup-less container</strong> confined by Landlock and seccomp, running unprivileged. See the <a href="/docs/oci.html">OCI runtime guide</a> for the spec translation table.</p>
+                <h3>runc and Kubernetes</h3>
+                <p class="what">The default OCI runtime, built from namespaces, cgroups, and <code class="inline">pivot_root</code>.</p>
+                <dl>
+                    <dt>Difference</dt>
+                    <dd>Not either/or. <a href="/docs/oci.html"><code class="inline">sandlock-oci</code></a> implements the same runtime interface, producing a <strong>namespace-less, cgroup-less container</strong> that runs unprivileged, so existing OCI images need no changes.</dd>
+                    <dt>Prefer runc when</dt>
+                    <dd>Your workload depends on a container-private PID or network namespace specifically, rather than on the isolation they provide.</dd>
+                </dl>
             </div>
         </div>
     </div>
