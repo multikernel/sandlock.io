@@ -168,11 +168,11 @@ result = sandbox.run([<span class="s">"python3"</span>, <span class="s">"agent.p
 <span class="k">let</span> result = dynamic.run(&amp;[<span class="s">"python3"</span>, <span class="s">"agent.py"</span>]).<span class="k">await</span>?;</code></pre>
 </div>
 
-<h2>Custom handlers</h2>
+<h2 id="custom-handlers">Beyond the callback: extension handlers</h2>
 
-<p>A policy callback is a single function consulted for a fixed set of syscalls. When you need to register for arbitrary syscalls, or synthesize a return value rather than simply allowing or denying, use a handler.</p>
+<p>A policy callback is a single function consulted for a fixed set of syscalls, and its verdict is allow, deny, or audit. When you need to register on arbitrary syscalls, synthesize a return value rather than merely permitting or refusing one, hand the guest a file that exists nowhere on disk, or do slow work without stalling the supervisor, that is a handler rather than a policy function.</p>
 
-<p>The supervisor runs its built-in chain first and any registered handlers after it, so <strong>a handler can extend confinement but never subvert it</strong>. Registration is validated: handlers on syscalls in the default blocklist, or in the policy's extra denials, are rejected at registration time rather than silently never firing.</p>
+<p>Handlers are available in Rust, Python, and any language with a C FFI, and the built-in chain always runs first, so a handler can extend confinement but never subvert it. Python gets a <code class="inline">Handler</code> base class, an <code class="inline">ExceptionPolicy</code> for what happens when a handler raises, and ready-made presets for auditing and path allow/deny lists.</p>
 
 <div class="code-block">
     <div class="code-block-header">
@@ -191,37 +191,4 @@ sb.run_with_handlers(
 )</code></pre>
 </div>
 
-<h3>Included presets</h3>
-
-<div class="data-table-wrap">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th scope="col">Class</th>
-                <th scope="col">Behaviour</th>
-                <th scope="col">On handler error</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr><th scope="row"><code>AuditPathsHandler</code></th><td>Calls <code>callback(path, ctx)</code> for every intercepted path syscall and always continues</td><td><code>CONTINUE</code></td></tr>
-            <tr><th scope="row"><code>PathDenyHandler</code></th><td>Denies syscalls whose path matches an <code>fnmatch</code> pattern; first match wins</td><td><code>KILL</code></td></tr>
-            <tr><th scope="row"><code>PathAllowHandler</code></th><td>Allows only matching paths and denies the rest</td><td><code>KILL</code></td></tr>
-            <tr><th scope="row"><code>LogSyscallsHandler</code></th><td>Logs one line per intercepted syscall, never changing behaviour</td><td>&mdash;</td></tr>
-        </tbody>
-    </table>
-</div>
-
-<p>The two path-matching presets differ in how they treat an unreadable path, and the asymmetry is intentional. A denylist that cannot classify the path continues, because a denylist only claims that the listed patterns are denied. An allowlist that cannot classify the path denies, because an allowlist claims everything unlisted is denied and failing to verify means failing closed.</p>
-
-<h3>Core types</h3>
-
-<ul>
-    <li><strong><code class="inline">Handler</code></strong> &mdash; subclass and override <code class="inline">handle(ctx) -&gt; NotifAction</code>. Defining <code class="inline">handle</code> as <code class="inline">async def</code> runs it off the supervisor loop, so it can await slow work without stalling other trapped syscalls. The class attribute <code class="inline">on_exception</code> chooses what the supervisor does if the handler itself raises.</li>
-    <li><strong><code class="inline">HandlerCtx</code></strong> &mdash; a frozen dataclass carrying the notification fields (<code class="inline">id</code>, <code class="inline">pid</code>, <code class="inline">flags</code>, <code class="inline">syscall_nr</code>, <code class="inline">arch</code>, <code class="inline">instruction_pointer</code>, <code class="inline">args</code>) plus child-memory accessors: <code class="inline">read_cstr</code>, <code class="inline">read</code>, <code class="inline">write</code>, and <code class="inline">read_path</code>.</li>
-    <li><strong><code class="inline">NotifAction</code></strong> &mdash; a frozen value object built through factory methods: <code class="inline">continue_()</code>, <code class="inline">errno(v)</code>, <code class="inline">returns(v)</code>, <code class="inline">hold()</code>, <code class="inline">kill(sig, pgid)</code>, <code class="inline">inject_fd_send(...)</code>, and <code class="inline">inject_bytes(...)</code>.</li>
-    <li><strong><code class="inline">ExceptionPolicy</code></strong> &mdash; <code class="inline">KILL</code> (the default), <code class="inline">DENY_EPERM</code>, <code class="inline">CONTINUE</code>, <code class="inline">DENY_EIO</code>.</li>
-</ul>
-
-<p>The memory accessors bracket every read and write with validity checks on the notification id, so they cannot race with the kernel aborting or releasing the trapped syscall while the supervisor is reading the child's memory. That protects the read itself; it does not change the fact that a decision made on a path string is subject to the re-read described <a href="#no-paths-on-events">above</a>, so keep Landlock as the authoritative layer for path policy.</p>
-
-<p>The Rust handler API, including the complete set of return actions, guest-memory access, content injection, deferred handlers, and the security boundary, is covered on <a href="/docs/handlers.html">Extension Handlers</a>.</p>
+<p>The full API for every language is on <a href="/docs/handlers.html">Extension Handlers</a>.</p>

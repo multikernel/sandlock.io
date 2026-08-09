@@ -12,13 +12,15 @@ lede: "Everything up to here is policy you declare. Handlers are the layer where
 
 <p><code class="inline">Handler</code> is the public extension trait that appends your handlers to that chain, after all the built-ins. With it you can observe any syscall Sandlock intercepts, deny it, fabricate its return value, hand the workload a file that does not exist on disk, or park the call while you go ask a remote service.</p>
 
+<p>The mechanism is one feature with three bindings. This page covers the model and the Rust API first, since that is where the semantics are defined, then the <a href="#python">Python</a> and <a href="#c-abi">C</a> surfaces, which differ only in shape.</p>
+
 <h2>Why this is a trait and not a fork</h2>
 
 <p>The kernel permits exactly one <code class="inline">SECCOMP_FILTER_FLAG_NEW_LISTENER</code> per process, which means one supervisor task. Code that wants to intercept extra syscalls in the same sandbox as the built-ins <strong>has to run inside the same dispatch loop</strong>. There is no second listener to attach to.</p>
 
 <p>Without an extension point the only options would be forking <code class="inline">sandlock-core</code> or duplicating its supervisor. The handler trait exists so a downstream crate can depend on <code class="inline">sandlock-core</code> as an ordinary dependency, with no fork, no <code class="inline">[patch.crates-io]</code>, and no copy of the notification loop to keep in sync.</p>
 
-<h2>Writing a handler</h2>
+<h2>Writing a handler in Rust</h2>
 
 <p>The trait has a single method returning a boxed future, kept dyn-compatible so the supervisor can store handlers as <code class="inline">Vec&lt;Arc&lt;dyn Handler&gt;&gt;</code>. State lives on the struct's fields, which avoids <code class="inline">Arc::clone</code> ladders and closure ceremony at the call site.</p>
 
@@ -71,7 +73,7 @@ lede: "Everything up to here is policy you declare. Handlers are the layer where
 };</code></pre>
 </div>
 
-<h2>Registering</h2>
+<h2>Registering handlers in Rust</h2>
 
 <p>Two entry points, both of which spawn the sandbox, wait for it to exit, and return the result.</p>
 
@@ -449,12 +451,215 @@ NotifAction::InjectFdSend {
     <li><strong>Not part of the policy.</strong> Registering handlers is a runtime action, not a serializable part of a policy. <code class="inline">Policy</code> stays a pure data struct, which is why handlers never appear in a TOML profile.</li>
 </ul>
 
-<h2>Other languages</h2>
+<h2 id="python">Python</h2>
 
-<p>The same handler model is available beyond Rust.</p>
+<p>The Python wrapper in <code class="inline">sandlock.handler</code> exposes the same model. Everything above about ordering, the security boundary, and the deferral contract applies unchanged; what follows is the Python surface and the things that are Python-specific.</p>
 
-<p><strong>Python</strong> wraps it in <code class="inline">sandlock.handler</code>, with <code class="inline">Handler</code>, <code class="inline">HandlerCtx</code>, <code class="inline">NotifAction</code>, and an <code class="inline">ExceptionPolicy</code> for what happens when a handler raises, plus ready-made presets for auditing and path allow/deny lists. See <a href="/docs/policy.html#custom-handlers">custom handlers in Python</a>.</p>
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">import</span> sandlock
+<span class="k">from</span> sandlock.presets <span class="k">import</span> AuditPathsHandler, COMMON_PATH_SYSCALLS
 
-<p><strong>C and any language with a C FFI</strong> go through the <code class="inline">sandlock-ffi</code> shared library, whose header declares the same model. The callback contract is strict and worth reading before writing one: return zero exactly when you have called one, and only one, of the action setters; return non-zero on internal error, at which point the supervisor applies your configured exception policy; and never retain the notification, memory-handle, or action-output pointers past the return statement. Because the supervisor may invoke a C callback from multiple worker threads, <strong>the caller must ensure their user-data pointer is thread-safe</strong> — Rust offers no synchronization for an opaque <code class="inline">void*</code>.</p>
+audit = AuditPathsHandler(callback=<span class="k">lambda</span> path, _ctx: <span class="k">print</span>(<span class="s">f"open {path}"</span>))
 
-<p>The C counterpart of <code class="inline">inject_bytes</code> takes a flags bitmask whose zero value is the safe default, sealed read-only with <code class="inline">O_CLOEXEC</code>; <code class="inline">SANDLOCK_INJECT_WRITABLE</code> and <code class="inline">SANDLOCK_INJECT_NO_CLOEXEC</code> opt out. The supervisor copies your data during the call and owns the resulting descriptor, so the caller passes no fd and frees nothing.</p>
+sb = sandlock.Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/etc"</span>, <span class="s">"/lib"</span>, <span class="s">"/bin"</span>])
+sb.run_with_handlers(
+    cmd=[<span class="s">"/usr/bin/cat"</span>, <span class="s">"/etc/hostname"</span>],
+    handlers=[(s, audit) <span class="k">for</span> s <span class="k">in</span> COMMON_PATH_SYSCALLS],
+)</code></pre>
+</div>
+
+<p>Syscalls are named with strings here rather than <code class="inline">libc::SYS_*</code> constants, so registration reads as <code class="inline">("openat", handler)</code>.</p>
+
+<h3>Core types</h3>
+
+<ul>
+    <li><strong><code class="inline">Handler</code></strong> &mdash; subclass and override <code class="inline">handle(ctx) -&gt; NotifAction</code>. Set the class attribute <code class="inline">on_exception</code> to choose what the supervisor does if your handler raises.</li>
+    <li><strong><code class="inline">HandlerCtx</code></strong> &mdash; a frozen dataclass with the notification fields (<code class="inline">id</code>, <code class="inline">pid</code>, <code class="inline">flags</code>, <code class="inline">syscall_nr</code>, <code class="inline">arch</code>, <code class="inline">instruction_pointer</code>, <code class="inline">args</code>) plus the child-memory accessors below.</li>
+    <li><strong><code class="inline">NotifAction</code></strong> &mdash; a frozen value object built through factories: <code class="inline">continue_()</code>, <code class="inline">errno(v)</code>, <code class="inline">returns(v)</code>, <code class="inline">hold()</code>, <code class="inline">kill(sig, pgid)</code>, <code class="inline">inject_fd_send(srcfd, newfd_flags)</code>, and <code class="inline">inject_bytes(data, *, seal=True, cloexec=True)</code>.</li>
+    <li><strong><code class="inline">ExceptionPolicy</code></strong> &mdash; <code class="inline">KILL</code> (the default), <code class="inline">DENY_EPERM</code>, <code class="inline">CONTINUE</code>, <code class="inline">DENY_EIO</code>.</li>
+</ul>
+
+<p>The core types are re-exported from the root <code class="inline">sandlock</code> package; the presets deliberately are not, so the root surface stays minimal and you reach into <code class="inline">sandlock.presets</code> when you want them.</p>
+
+<h3>Reading the guest</h3>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Accessor</th><th scope="col">Returns</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>read_cstr(addr, max_len)</code></th><td>Decoded string, or <code>None</code> on failure</td></tr>
+            <tr><th scope="row"><code>read(addr, length)</code></th><td>Raw bytes, or <code>None</code></td></tr>
+            <tr><th scope="row"><code>write(addr, data)</code></th><td><code>True</code> on success</td></tr>
+            <tr><th scope="row"><code>read_path(arg=None, max_len=4096)</code></th><td>A path-bearing argument as a string, or <code>None</code></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p><code class="inline">read_path()</code> infers which argument holds the path from the syscall number, using a name-keyed table:</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Syscall</th><th scope="col">Path argument</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>openat</code>, <code>unlinkat</code>, <code>mkdirat</code>, <code>newfstatat</code>, <code>statx</code>, <code>faccessat</code>, <code>readlinkat</code>, <code>execveat</code></th><td>1</td></tr>
+            <tr><th scope="row"><code>open</code>, <code>unlink</code>, <code>mkdir</code>, <code>rmdir</code>, <code>stat</code>, <code>lstat</code>, <code>access</code>, <code>readlink</code>, <code>execve</code></th><td>0</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>Multi-path syscalls (<code class="inline">renameat2</code>, <code class="inline">rename</code>, <code class="inline">linkat</code>, <code class="inline">link</code>, <code class="inline">symlinkat</code>, <code class="inline">symlink</code>) and unknown syscalls raise <code class="inline">ValueError</code>; pass <code class="inline">arg=</code> explicitly there.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">def</span> handle(<span class="k">self</span>, ctx):
+    <span class="c"># renameat2(olddirfd, oldpath, newdirfd, newpath, flags)</span>
+    src = ctx.read_path(arg=1)
+    dst = ctx.read_path(arg=3)
+    <span class="k">return</span> NotifAction.continue_()</code></pre>
+</div>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>That <code class="inline">ValueError</code> is a kill by default.</strong> Under <code class="inline">on_exception=KILL</code>, calling <code class="inline">read_path()</code> with no <code class="inline">arg=</code> on a syscall outside the table raises, and the raise becomes a kill signal to the child. Either register only against syscalls in <code class="inline">COMMON_PATH_SYSCALLS</code>, pass <code class="inline">arg=</code> explicitly, or set <code class="inline">on_exception=ExceptionPolicy.CONTINUE</code>.</p>
+    </div>
+</div>
+
+<h3>Presets</h3>
+
+<p><code class="inline">COMMON_PATH_SYSCALLS</code> is the set of modern path-bearing syscalls a generic file-operation handler is normally registered against: <code class="inline">openat</code>, <code class="inline">unlinkat</code>, <code class="inline">newfstatat</code>, <code class="inline">statx</code>, <code class="inline">faccessat</code>, <code class="inline">readlinkat</code>, <code class="inline">mkdirat</code>, <code class="inline">execveat</code>, <code class="inline">execve</code>.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Preset</th><th scope="col">Behaviour</th><th scope="col">On handler error</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>AuditPathsHandler(callback, max_len=4096)</code></th><td>Calls <code>callback(path, ctx)</code> on every intercepted syscall, including when the path is <code>None</code> so the caller sees "couldn't read", then continues</td><td><code>CONTINUE</code></td></tr>
+            <tr><th scope="row"><code>PathDenyHandler(deny, errno=EPERM)</code></th><td>Denies paths matching any <code>fnmatch</code> pattern; first match wins</td><td><code>KILL</code></td></tr>
+            <tr><th scope="row"><code>PathAllowHandler(allow, errno=EACCES)</code></th><td>Allows only matching paths, denies the rest</td><td><code>KILL</code></td></tr>
+            <tr><th scope="row"><code>LogSyscallsHandler(logger=None)</code></th><td>Logs <code>syscall=N pid=P args=(…)</code> per call. Defaults to the <code>sandlock.audit</code> logger; any callable taking a string works</td><td><code>CONTINUE</code></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The two path-matching presets treat an unreadable path differently, and the asymmetry is deliberate. <strong>A denylist that cannot classify the path continues</strong>, because a denylist only claims the listed patterns are denied and the decision defers to Landlock and the rest of the chain. <strong>An allowlist that cannot classify the path denies</strong>, because an allowlist claims everything unlisted is denied, so failing to verify means failing closed.</p>
+
+<p>Both reject a bare string where a list is expected, with <code class="inline">TypeError</code>, so the API stays uniform.</p>
+
+<h3>Recipes</h3>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># Deny a directory tree</span>
+deny = PathDenyHandler(deny=[<span class="s">"/etc/*"</span>, <span class="s">"/var/lib/*"</span>])
+sb.run_with_handlers(cmd, [(s, deny) <span class="k">for</span> s <span class="k">in</span> COMMON_PATH_SYSCALLS])
+
+<span class="c"># Allowlist, fail-closed: anything else, and any unreadable path, is EACCES</span>
+allow = PathAllowHandler(allow=[<span class="s">"/tmp/sandbox/*"</span>, <span class="s">"/usr/lib/*"</span>])
+sb.run_with_handlers(cmd, [(s, allow) <span class="k">for</span> s <span class="k">in</span> COMMON_PATH_SYSCALLS])
+
+<span class="c"># Two handlers on one syscall: registration order, first non-continue wins</span>
+sb.run_with_handlers(cmd, [(<span class="s">"openat"</span>, audit), (<span class="s">"openat"</span>, deny)])</code></pre>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python — synthesize a result, and a virtual file</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock.handler <span class="k">import</span> Handler, NotifAction, ExceptionPolicy
+
+<span class="k">class</span> FakePid(Handler):
+    on_exception = ExceptionPolicy.KILL
+
+    <span class="k">def</span> handle(<span class="k">self</span>, ctx):
+        <span class="k">return</span> NotifAction.returns(777)
+
+<span class="k">class</span> HostnameFile(Handler):
+    on_exception = ExceptionPolicy.KILL
+
+    <span class="k">def</span> handle(<span class="k">self</span>, ctx):
+        <span class="k">if</span> ctx.read_path() == <span class="s">"/etc/hostname"</span>:
+            <span class="k">return</span> NotifAction.inject_bytes(<span class="s">b"sandbox\n"</span>)
+        <span class="k">return</span> NotifAction.continue_()
+
+sb.run_with_handlers(cmd, [(<span class="s">"getpid"</span>, FakePid()), (<span class="s">"openat"</span>, HostnameFile())])</code></pre>
+</div>
+
+<p><code class="inline">inject_bytes</code> behaves as it does in Rust: it builds the in-memory file, rewinds it, seals it read-only, and transfers descriptor ownership to the supervisor, so the caller must not close it. Pass <code class="inline">seal=False</code> for a writable descriptor, or <code class="inline">cloexec=False</code> to mirror a guest that opened the file without <code class="inline">O_CLOEXEC</code>. A rare allocation failure raises <code class="inline">OSError</code>, which your <code class="inline">on_exception</code> policy then governs.</p>
+
+<h3>Slow work: <code>async def handle</code></h3>
+
+<p>Python's deferral is simply defining <code class="inline">handle</code> as a coroutine. There is no flag to set. The coroutine is driven to completion on a worker thread, so it can await slow work without blocking the supervisor loop.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">class</span> FetchHandler(Handler):
+    <span class="k">def</span> __init__(<span class="k">self</span>, backend):
+        <span class="k">self</span>.backend = backend
+
+    <span class="k">async def</span> handle(<span class="k">self</span>, ctx):
+        key = ctx.read_path()                <span class="c"># read the path before the slow work</span>
+        <span class="k">if</span> key <span class="k">is None</span>:
+            <span class="k">return</span> NotifAction.continue_()
+        data = <span class="k">await</span> <span class="k">self</span>.backend.get(key)  <span class="c"># slow GET, awaited off-loop</span>
+        <span class="k">return</span> NotifAction.inject_bytes(data)</code></pre>
+</div>
+
+<p>This helps Python specifically: the coroutine runs on a worker thread and CPython releases the GIL while awaiting I/O, so several async handlers doing network work genuinely overlap while the supervisor loop stays free. It does <strong>not</strong> parallelize CPU-bound Python work, since the GIL still serializes that; for that, push the hot path into a C extension that releases the GIL.</p>
+
+<p><code class="inline">ctx</code> and its memory accessors stay valid for the whole coroutine, so paths can be read and results written across await points. The deferral contract is the same one described <a href="#deferred-handlers">above</a>: terminal decision, refused on <code class="inline">execve</code> and fork-creating syscalls, and bounded in-flight with <code class="inline">EAGAIN</code> beyond the cap.</p>
+
+<p>Make <code class="inline">handle</code> async only when it must do slow work. For fast handlers such as audit counters and path checks, a synchronous <code class="inline">handle</code> runs inline at lower latency.</p>
+
+<h3>Threading and safety</h3>
+
+<ul>
+    <li><strong>GIL contention.</strong> Each dispatch holds the GIL for the duration of <code class="inline">handle()</code>, and the supervisor may dispatch callbacks concurrently across notifications. Design <code class="inline">handle()</code> to be fast, sub-millisecond, and protect mutable handler state with your own synchronization. High-frequency interception, such as per-<code class="inline">openat</code> auditing on a busy workload, will serialize on the GIL and can stall the supervisor.</li>
+    <li><strong>Interpreter finalization.</strong> If <code class="inline">Py_FinalizeEx</code> runs while the sandbox is still alive, the trampoline detects it and routes the notification through <code class="inline">on_exception</code>. Do not rely on this for clean shutdown; wait for the run to finish before tearing down the interpreter.</li>
+    <li><strong>Native crashes.</strong> A segfault inside a Python handler is not recoverable: the supervisor task hangs and the trapped child is held indefinitely. Write defensive handlers.</li>
+    <li><strong>Tokio reentrancy.</strong> The C ABI builds and drives its own Tokio runtime, so <code class="inline">run_with_handlers</code> must not be called from a thread already running one. The FFI panics, surfacing as a Python exception. Pure-Python use, the common case, is unaffected.</li>
+</ul>
+
+<h3>Ownership</h3>
+
+<p>Handler instances must outlive the run; the sandbox holds a strong reference for its duration and releases it when the run completes, on success or failure. Descriptors passed via <code class="inline">inject_fd_send(srcfd)</code> transfer ownership to the supervisor on dispatch, so <strong>the caller must not close <code class="inline">srcfd</code></strong> afterwards, whether or not the action was actually dispatched.</p>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Testing security-critical handlers.</strong> User handlers only fire when every built-in for that syscall first returned <em>continue</em>. When testing something like a <code class="inline">PathDenyHandler</code> on <code class="inline">openat</code>, exercise it against the real built-in set for your syscall list rather than against an empty dispatch table, or you will be testing a path production never takes.</p>
+    </div>
+</div>
+
+<h2 id="c-abi">C and other languages</h2>
+
+<p>The same model is available to any language with a C FFI, through the <code class="inline">sandlock-ffi</code> shared library whose header declares the interface. The callback contract is strict and worth reading before writing one:</p>
+
+<ol>
+    <li>Return <strong>zero exactly when</strong> you have called one, and only one, of the action setters on the output parameter.</li>
+    <li>Return non-zero on any internal error. The supervisor then applies the handler's <code class="inline">on_exception</code> policy, which defaults to kill.</li>
+    <li>Never retain the notification, memory-handle, or action-output pointers past the return statement. They are stack-scoped to a single callback.</li>
+</ol>
+
+<p>Because the supervisor may invoke a C callback from multiple worker threads across different notifications, <strong>the caller must ensure their user-data pointer is thread-safe</strong>, either immutable or guarded by their own synchronization. Rust offers no synchronization for an opaque <code class="inline">void*</code>; that responsibility sits on the C side.</p>
+
+<p>The C counterpart of <code class="inline">inject_bytes</code> takes a flags bitmask whose zero value is the safe default, sealed read-only with <code class="inline">O_CLOEXEC</code>. <code class="inline">SANDLOCK_INJECT_WRITABLE</code> leaves the in-memory file writable, and <code class="inline">SANDLOCK_INJECT_NO_CLOEXEC</code> clears the close-on-exec bit. The supervisor copies your data during the call and owns the resulting descriptor, so the caller passes no fd and frees nothing; <code class="inline">data</code> may be <code class="inline">NULL</code> when the length is zero, which injects an empty file.</p>

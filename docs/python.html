@@ -261,7 +261,7 @@ confine(Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/li
 
 <h2>Dynamic policy and handlers</h2>
 
-<p>The <code class="inline">policy_fn</code> callback and the <code class="inline">Handler</code> API are covered on <a href="/docs/policy.html">Dynamic Policy</a>. In brief:</p>
+<p>Two extension points, each with its own page. <a href="/docs/policy.html">Dynamic Policy</a> covers the <code class="inline">policy_fn</code> callback, which returns allow, deny, or audit for a fixed set of syscalls. <a href="/docs/handlers.html#python">Extension Handlers</a> covers the <code class="inline">Handler</code> API, which registers on arbitrary syscalls and can synthesize return values, inject file content, and defer slow work. In brief:</p>
 
 <div class="code-block">
     <div class="code-block-header">
@@ -276,6 +276,19 @@ confine(Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/li
     <span class="k">return</span> 0                       <span class="c"># allow</span>
 
 sandbox = Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>], policy_fn=on_event)</code></pre>
+</div>
+
+<p>And a handler, registered on whichever syscalls you name:</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">from</span> sandlock.presets <span class="k">import</span> PathDenyHandler, COMMON_PATH_SYSCALLS
+
+deny = PathDenyHandler(deny=[<span class="s">"*/.ssh/*"</span>, <span class="s">"*/.aws/*"</span>])
+sandbox.run_with_handlers(cmd, [(s, deny) <span class="k">for</span> s <span class="k">in</span> COMMON_PATH_SYSCALLS])</code></pre>
 </div>
 
 <h2>Helpers and types</h2>
