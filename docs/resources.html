@@ -1,0 +1,211 @@
+---
+layout: doc
+title: "Resource Limits"
+description: "Capping memory, processes, open files, CPU, disk, and GPU access in Sandlock without cgroups, plus CPU pinning and a virtualized view of /proc."
+permalink: /docs/resources.html
+short_title: "Resources"
+heading: "Resource Limits"
+lede: "How much of the machine a sandbox may consume, and which devices it may reach. All of it without cgroups: the supervisor accounts for allocation as it happens, and device access is a Landlock boundary rather than an environment variable."
+---
+
+<h2>The fields</h2>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Python</th>
+                <th scope="col">TOML</th>
+                <th scope="col">CLI</th>
+                <th scope="col">Default</th>
+                <th scope="col">Caps</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>max_memory</code></th><td><code>memory</code></td><td><code>-m</code></td><td>none</td><td>Resident anonymous memory</td></tr>
+            <tr><th scope="row"><code>max_processes</code></th><td><code>processes</code></td><td><code>-P</code></td><td><code>64</code></td><td>Concurrent processes</td></tr>
+            <tr><th scope="row"><code>max_open_files</code></th><td><code>open_files</code></td><td><code>--max-open-files</code></td><td>none</td><td>Open descriptors</td></tr>
+            <tr><th scope="row"><code>max_cpu</code></th><td><code>cpu</code></td><td><code>-c</code></td><td>none</td><td>Percentage of one core</td></tr>
+            <tr><th scope="row"><code>max_disk</code></th><td><code>disk</code></td><td><code>--max-disk</code></td><td>none</td><td>COW upper-layer size</td></tr>
+            <tr><th scope="row"><code>cpu_cores</code></th><td><code>cpu_cores</code></td><td><code>--cpu-cores</code></td><td>none</td><td>Which cores may run it</td></tr>
+            <tr><th scope="row"><code>num_cpus</code></th><td><code>num_cpus</code></td><td><code>--num-cpus</code></td><td>none</td><td>How many cores it can see</td></tr>
+            <tr><th scope="row"><code>gpu_devices</code></th><td><code>gpu_devices</code></td><td><code>--gpu</code></td><td>none (denied)</td><td>Which GPUs it may open</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>A wall-clock timeout is separate, and CLI-only: <code class="inline">-t</code> kills the sandbox after that many seconds. From the SDKs, pass <code class="inline">timeout=</code> to the run call.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">A typical envelope</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> -m 512M -P 20 -t 30 -- ./compute.sh</code></pre>
+</div>
+
+<h2>Memory</h2>
+
+<p>There are no cgroups involved. The supervisor intercepts <code class="inline">mmap</code>, <code class="inline">munmap</code>, <code class="inline">brk</code>, and <code class="inline">mremap</code>, and tracks the sandbox's allocation against the cap as the calls happen.</p>
+
+<p>Two consequences worth knowing:</p>
+
+<p><strong>Only anonymous mappings count.</strong> The accounting is for memory the sandbox actually claims, so a file-backed mapping of a large read-only file is not charged against the limit. This is usually what you want, and it is why a workload that maps a multi-gigabyte model file can still run under a modest cap.</p>
+
+<p><strong>The decisions are made on register arguments.</strong> Mapping length and <code class="inline">brk</code> addresses arrive in the notification itself rather than through a pointer into the guest's memory, so this accounting is not exposed to the re-read hazard that governs path handling. The one exception is <code class="inline">clone3</code>, whose flags live in a struct the supervisor reads from guest memory; that read feeds process accounting only, never a security decision, so a misread can throttle incorrectly but cannot bypass a kernel-enforced deny.</p>
+
+<p>Accepts a string such as <code class="inline">"512M"</code> or <code class="inline">"1G"</code>, or an integer byte count.</p>
+
+<h2>Processes</h2>
+
+<p><code class="inline">max_processes</code> is a cap on <strong>concurrent</strong> processes, not on how many the sandbox may create over its lifetime. A build that spawns ten thousand short-lived compilers sequentially runs fine under a limit of 64; ten thousand at once does not.</p>
+
+<p><strong>Threads do not count.</strong> A fork-like call carrying <code class="inline">CLONE_THREAD</code> is creating a thread, not a process, and is not charged. A workload with a large thread pool is unaffected by this limit.</p>
+
+<p>The default is 64. Setting it also enables the fork interception used by checkpoint freeze, so a policy that needs checkpointing gets it as a side effect of having a process limit at all.</p>
+
+<h2>Open files</h2>
+
+<p>This one has more edges than the others, and it is worth being precise about what it is.</p>
+
+<p><code class="inline">max_open_files</code> is enforced with <code class="inline">RLIMIT_NOFILE</code>, set in the child just before it execs. Both the soft and the hard limit are lowered, and descendants inherit the cap.</p>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>Treat this as a budget, not as confinement.</strong> Lowering the hard limit is one-way only for an <em>unprivileged</em> Sandlock. A sandbox launched by root, or with <code class="inline">CAP_SYS_RESOURCE</code>, can raise it back, because Sandlock does not drop capabilities.</p>
+    </div>
+</div>
+
+<p><strong>It is an upper bound, never a grant.</strong> The value is clamped to both limits Sandlock itself inherited, so requesting more than the inherited soft limit gives the guest the inherited limit rather than the number you asked for. If a guest genuinely needs a bigger budget, raise the limit on Sandlock itself with <code class="inline">prlimit</code> or systemd's <code class="inline">LimitNOFILE=</code>.</p>
+
+<p><strong>It has to cover process startup.</strong> The limit must accommodate stdio, the dynamic loader's per-library descriptors, and under <code class="inline">chroot</code> the injected exec descriptor. Set it too low and the exec fails with exit code 127.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">When it fails</th><th scope="col">Plain exec</th><th scope="col">Under chroot</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row">At startup</th><td><code>EMFILE</code>, exit 127</td><td><code>EIO</code>, exit 127</td></tr>
+            <tr><th scope="row">After startup, kernel-serviced open</th><td colspan="2"><code>EMFILE</code></td></tr>
+            <tr><th scope="row">After startup, supervisor-mediated open</th><td colspan="2"><code>EACCES</code> (chroot, COW, procfs virtualization)</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>The measured floor for a trivial command is about 4, for both plain exec and chroot. Programs linking more libraries need more.</p>
+
+<h2>CPU</h2>
+
+<p>Two independent knobs: how much CPU time the sandbox gets, and which cores it runs on.</p>
+
+<h3>Throttling</h3>
+
+<p><code class="inline">max_cpu</code> is a percentage of a single core, from 1 to 100. It is applied to the entire process group by cycling <code class="inline">SIGSTOP</code> and <code class="inline">SIGCONT</code> from a supervisor task.</p>
+
+<p>That mechanism is worth understanding before you rely on it. It is a duty cycle, not a scheduler reservation: the sandbox is repeatedly stopped and resumed to approximate the requested share. It is effective for holding a runaway workload down, and it is <strong>not</strong> the latency guarantee a cgroup CPU quota gives you. For hard scheduling guarantees, use cgroups on the Sandlock process itself.</p>
+
+<h3>Pinning</h3>
+
+<p><code class="inline">cpu_cores</code> pins the sandbox to a set of cores through <code class="inline">sched_setaffinity</code> in the child. This is a real placement decision made by the kernel, not an approximation.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Throttle to half a core, pinned to cores 0 and 1</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> -c 50 --cpu-cores 0,1 \
+    -r /usr -r /lib -- ./compute.sh</code></pre>
+</div>
+
+<h3>What the sandbox can see</h3>
+
+<p><code class="inline">num_cpus</code> changes the visible CPU count in <code class="inline">/proc/cpuinfo</code>, renumbered <code class="inline">0..N-1</code>. This matters more than it sounds: runtimes size their thread pools from what they see there, so a workload on a 128-core host will happily spawn 128 workers inside a sandbox pinned to two cores unless you tell it otherwise.</p>
+
+<p>When <code class="inline">max_memory</code> is also set, <code class="inline">/proc/meminfo</code> is virtualized to match, so a runtime sizing its heap from available memory sees the sandbox's budget rather than the host's.</p>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>Pinning and visibility are separate.</strong> <code class="inline">cpu_cores</code> decides where the sandbox runs; <code class="inline">num_cpus</code> decides what it believes about the machine. Set both when a workload sizes itself from the CPU count.</p>
+    </div>
+</div>
+
+<h2>Disk</h2>
+
+<p><code class="inline">max_disk</code> caps the copy-on-write upper layer, so it only applies when <code class="inline">workdir</code> is set. Exceeding it surfaces to the workload as <code class="inline">ENOSPC</code>, the same error a full disk produces, which means programs handle it through the path they already have for that case.</p>
+
+<p>See <a href="/docs/filesystem.html#storage-and-quota">storage and quota</a> for where the upper layer lives and how to move it off the source volume.</p>
+
+<h2>GPUs</h2>
+
+<p>GPU selection is an access-control decision, not a hint. <code class="inline">gpu_devices</code> adds Landlock rules for the chosen <code class="inline">/dev/nvidia*</code> and <code class="inline">/dev/dri/*</code> nodes, and sets <code class="inline">CUDA_VISIBLE_DEVICES</code> and <code class="inline">ROCR_VISIBLE_DEVICES</code> to match.</p>
+
+<p>The environment variables are a convenience for the frameworks. <strong>The boundary is the Landlock rule</strong>: a sandbox given device 0 cannot open any other device node, whatever the workload does with its environment. This is the difference between hiding a GPU and denying it.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr><th scope="col">Value</th><th scope="col">Effect</th></tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>None</code> (the default)</th><td>GPU access denied entirely</td></tr>
+            <tr><th scope="row"><code>[]</code></th><td>Every GPU exposed</td></tr>
+            <tr><th scope="row"><code>[0, 2]</code></th><td>Only those devices openable</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<p>From the CLI, <code class="inline">--gpu all</code> exposes every device and <code class="inline">--gpu 0,2</code> selects indices.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">One GPU, hard boundary</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># The NVIDIA userspace also needs the driver libraries readable, and</span>
+<span class="c"># it writes thread names under /proc/self/task.</span>
+<span class="p">$</span> <span class="k">sandlock run</span> --gpu 0 \
+    -r /usr -r /lib -r /lib64 -r /etc -r /sys -r /proc \
+    -w /proc/self/task \
+    -- python3 train.py</code></pre>
+</div>
+
+<p>The extra paths in that example are not incidental. The NVIDIA userspace stack loads driver libraries from the system directories and writes thread names under <code class="inline">/proc/self/task</code>, so a policy that grants only the device node will fail in ways that look like a driver problem rather than a policy one.</p>
+
+<h2>Tightening limits at runtime</h2>
+
+<p>Memory and process limits can be lowered while the sandbox runs, from a policy callback. A common shape is to give a program the headroom it needs to initialize, then reduce it once startup is done.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">python</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="k">def</span> on_event(event, ctx):
+    <span class="k">if</span> event.syscall == <span class="s">"execve"</span>:
+        ctx.restrict_max_memory(256 * 1024 * 1024)
+        ctx.restrict_max_processes(8)
+    <span class="k">return</span> 0
+
+sandbox = Sandbox(
+    fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>],
+    max_memory=<span class="s">"2G"</span>,
+    policy_fn=on_event,
+)</code></pre>
+</div>
+
+<p>These only narrow. See <a href="/docs/policy.html">Dynamic Policy</a> for the full context API.</p>
+
+<h2>What these limits are not</h2>
+
+<p>Stating this plainly, because picking the wrong primitive is worse than picking none:</p>
+
+<ul>
+    <li><strong>Not scheduler guarantees.</strong> CPU throttling is a stop/resume duty cycle. It bounds consumption; it does not reserve capacity or bound latency.</li>
+    <li><strong>Not protection against the workload wedging itself.</strong> Limits protect the host. A sandbox can still spin, thrash, or deadlock inside its own budget.</li>
+    <li><strong>Not a defence against a privileged launcher.</strong> The open-files cap in particular can be raised back by a sandbox launched with the capability to do so.</li>
+</ul>
+
+<p>If you need hard, scheduler-level guarantees, put the Sandlock process itself in a cgroup. The two compose: the cgroup bounds the whole thing from outside, and Sandlock's own limits partition what happens within it.</p>

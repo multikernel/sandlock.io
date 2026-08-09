@@ -47,6 +47,14 @@ lede: "Everything needed to write, test, and ship a Sandlock policy: a five-minu
         <h3><i data-lucide="globe-lock"></i>HTTP ACL and Credentials</h3>
         <p>Method, host, and path rules; zero-config HTTPS interception; injecting a secret the workload never sees.</p>
     </a>
+    <a href="/docs/resources.html" class="docs-index-card">
+        <h3><i data-lucide="gauge"></i>Resource Limits</h3>
+        <p>Memory, processes, open files, CPU throttling and pinning, disk quota, and GPU device selection, all without cgroups.</p>
+    </a>
+    <a href="/docs/determinism.html" class="docs-index-card">
+        <h3><i data-lucide="dice-5"></i>Determinism</h3>
+        <p>Frozen time via vDSO patching, a seeded PRNG for <code class="inline">getrandom</code>, sorted directory reads, and disabled ASLR.</p>
+    </a>
     <a href="/docs/policy.html" class="docs-index-card">
         <h3><i data-lucide="git-branch"></i>Dynamic Policy</h3>
         <p>Inspect syscall events at runtime, return a verdict, and tighten the sandbox while it runs.</p>

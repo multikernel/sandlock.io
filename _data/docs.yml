@@ -18,6 +18,10 @@ groups:
         title: Network Model
       - url: /docs/http-acl.html
         title: HTTP ACL and Credentials
+      - url: /docs/resources.html
+        title: Resource Limits
+      - url: /docs/determinism.html
+        title: Determinism
       - url: /docs/policy.html
         title: Dynamic Policy
       - url: /docs/handlers.html

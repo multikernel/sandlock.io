@@ -215,40 +215,17 @@ result = sandbox.dry_run([<span class="s">"make"</span>, <span class="s">"build"
 
 <p>COW is only active when <code class="inline">workdir</code> is set. Without it, none of these syscalls are intercepted for filesystem purposes and writes go straight to disk under the Landlock rules.</p>
 
-<h2>Determinism</h2>
+<h2>Related</h2>
 
-<p>Directory order is a common and invisible source of nondeterministic builds. <code class="inline">deterministic_dirs</code> sorts <code class="inline">readdir()</code> results lexicographically, so <code class="inline">ls</code>, <code class="inline">glob</code>, and <code class="inline">os.listdir</code> return a stable order across runs and across machines.</p>
+<p>Two topics that used to live on this page have their own now, because neither is really filesystem policy:</p>
 
-<div class="code-block">
-    <div class="code-block-header">
-        <span class="code-block-title">Remove the usual sources of variance</span>
-        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
-    </div>
-<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
-    --time-start <span class="s">"2000-01-01T00:00:00Z"</span> \
-    --random-seed 42 \
-    --deterministic-dirs \
-    --no-randomize-memory \
-    -- ./build.sh</code></pre>
+<div class="docs-index-grid">
+    <a href="/docs/determinism.html" class="docs-index-card">
+        <h3><i data-lucide="dice-5"></i>Determinism</h3>
+        <p>Sorted directory reads, a frozen clock, a seeded PRNG, and disabled ASLR. <code class="inline">deterministic_dirs</code> is the filesystem-facing one, and it belongs with the other three.</p>
+    </a>
+    <a href="/docs/resources.html" class="docs-index-card">
+        <h3><i data-lucide="gauge"></i>Resource limits</h3>
+        <p>Memory, processes, open files, CPU, disk quota, and GPU device selection. GPU access is enforced with Landlock rules, but it is a resource decision, not a path one.</p>
+    </a>
 </div>
-
-<p>See <a href="/docs/reference.html#determinism">the determinism section</a> of the reference for what each knob does.</p>
-
-<h2>GPU device access</h2>
-
-<p>GPU selection is filesystem policy, not an environment variable. <code class="inline">gpu_devices</code> adds Landlock rules for the chosen <code class="inline">/dev/nvidia*</code> and <code class="inline">/dev/dri/*</code> nodes and sets <code class="inline">CUDA_VISIBLE_DEVICES</code> and <code class="inline">ROCR_VISIBLE_DEVICES</code> to match. Because the boundary is the Landlock rule, <strong>a sandbox given device 0 cannot open any other device node</strong>, whatever the workload does with the environment.</p>
-
-<div class="code-block">
-    <div class="code-block-header">
-        <span class="code-block-title">One GPU, hard boundary</span>
-        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
-    </div>
-<pre><code><span class="c"># The NVIDIA userspace needs the driver libraries readable and</span>
-<span class="c"># writes thread names under /proc/self/task.</span>
-<span class="p">$</span> <span class="k">sandlock run</span> --gpu 0 \
-    -r /usr -r /lib -r /lib64 -r /etc -r /sys -r /proc \
-    -w /proc/self/task \
-    -- python3 train.py</code></pre>
-</div>
-
-<p><code class="inline">--gpu all</code> exposes every device. In the SDKs, <code class="inline">gpu_devices=None</code> denies GPU access entirely, an empty list exposes every GPU, and a list of indices exposes exactly those.</p>

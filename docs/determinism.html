@@ -1,0 +1,154 @@
+---
+layout: doc
+title: "Determinism"
+description: "Pin the sources of non-determinism in a sandboxed process: frozen time via vDSO patching, a seeded PRNG for getrandom, sorted directory reads, and disabled ASLR."
+permalink: /docs/determinism.html
+short_title: "Determinism"
+heading: "Determinism"
+lede: "Four knobs that remove the usual reasons two identical runs produce different output: the clock, the random number generator, directory order, and address-space layout."
+---
+
+<p>These are not confinement. Nothing here makes a sandbox safer, and a workload that ignores all four is no less contained. They exist because a sandbox is a controlled environment, and a controlled environment is the natural place to also control the inputs that make builds and tests irreproducible.</p>
+
+<div class="data-table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">Field</th>
+                <th scope="col">CLI</th>
+                <th scope="col">Default</th>
+                <th scope="col">Pins</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th scope="row"><code>time_start</code></th><td><code>--time-start</code></td><td>none</td><td>The clock</td></tr>
+            <tr><th scope="row"><code>random_seed</code></th><td><code>--random-seed</code></td><td>none</td><td><code>getrandom()</code></td></tr>
+            <tr><th scope="row"><code>deterministic_dirs</code></th><td><code>--deterministic-dirs</code></td><td><code>false</code></td><td>Directory order</td></tr>
+            <tr><th scope="row"><code>no_randomize_memory</code></th><td><code>--no-randomize-memory</code></td><td><code>false</code></td><td>Address layout</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">All four at once</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="p">$</span> <span class="k">sandlock run</span> \
+    --time-start <span class="s">"2000-01-01T00:00:00Z"</span> \
+    --random-seed 42 \
+    --deterministic-dirs \
+    --no-randomize-memory \
+    -- ./build.sh</code></pre>
+</div>
+
+<h2>Frozen time</h2>
+
+<p><code class="inline">time_start</code> takes a Unix timestamp or an RFC 3339 / ISO 8601 string, and sets the sandbox's clock to that instant. <strong>Time then advances at real speed from that epoch</strong> — it is a shifted clock, not a stopped one, so a program that measures elapsed time still sees it elapse.</p>
+
+<p>The offset is computed once at start as <code class="inline">desired - actual</code>, and every clock the sandbox reads has it added.</p>
+
+<h3>Why this needs vDSO patching</h3>
+
+<p>Most clock reads never reach the kernel. <code class="inline">clock_gettime</code> and friends are served from the vDSO, a small shared object the kernel maps into every process precisely so that reading the time does not cost a syscall. A supervisor that intercepts syscalls therefore sees almost none of a program's clock reads.</p>
+
+<p>So Sandlock patches the vDSO in the child's address space: it locates the mapping in <code class="inline">/proc/&lt;pid&gt;/maps</code>, parses the symbols, and rewrites the time functions to return the shifted value. On x86-64 the stubs are short and the gaps between symbols are wide, so the patch is applied inline; on arm64 and riscv64 the full stubs go in slack space at the tail of the mapping and each function entry gets a single four-byte jump to its stub.</p>
+
+<p>Patching happens before <code class="inline">exec</code>, and is <strong>re-applied on every <code class="inline">execve</code></strong>, since a fresh executable image gets a fresh vDSO mapping. If the pre-exec attempt fails, Sandlock warns and retries after exec rather than giving up.</p>
+
+<h3>Absolute timers</h3>
+
+<p>Shifting the clock creates a problem the supervisor has to undo. When a program arms an absolute timer, it computes the deadline from the clock it just read — which is the shifted one. Passing that deadline straight to the kernel would arm the timer at the wrong real time, off by exactly the offset.</p>
+
+<p>So the supervisor intercepts <code class="inline">clock_nanosleep</code>, <code class="inline">timer_settime</code>, and <code class="inline">timerfd_settime</code> when they carry <code class="inline">TIMER_ABSTIME</code>, and subtracts the offset before the kernel sees the deadline. The affected clocks are <code class="inline">CLOCK_MONOTONIC</code>, <code class="inline">CLOCK_MONOTONIC_RAW</code>, <code class="inline">CLOCK_MONOTONIC_COARSE</code>, and <code class="inline">CLOCK_BOOTTIME</code>.</p>
+
+<p>The net effect is that <code class="inline">sleep(5)</code> sleeps five real seconds and an absolute deadline fires when the shifted clock reaches it, which is what a program expects in both cases.</p>
+
+<h2>Seeded randomness</h2>
+
+<p><code class="inline">random_seed</code> makes <code class="inline">getrandom()</code> deterministic. The supervisor intercepts the call and writes bytes from a seeded ChaCha8 generator into the guest's buffer instead of letting the kernel supply entropy. Identical seeds produce identical byte streams.</p>
+
+<p>A single interception fills up to 1 MiB, which covers the practical cases: OpenSSL initialization, key generation, a language runtime seeding its own PRNG at startup.</p>
+
+<div class="callout warn">
+    <i data-lucide="triangle-alert"></i>
+    <div class="callout-body">
+        <p><strong>This is a reproducibility tool, not a security one, and it fails open.</strong> If the supervisor cannot deliver deterministic bytes — an allocation failure, a failed write into guest memory — the call falls through and the child receives real kernel entropy. That is a determinism failure rather than a security failure, and it is the right trade: the alternative would be failing a program's entropy request outright. It does mean you should never treat a seeded run as guaranteed byte-identical without checking.</p>
+    </div>
+</div>
+
+<p>What it does not cover: anything the program does not source from <code class="inline">getrandom()</code>. A workload reading <code class="inline">/dev/urandom</code> through an already-open descriptor, or seeding from the clock, needs the clock pinned too.</p>
+
+<h2>Directory order</h2>
+
+<p>Directory order is the most common invisible source of irreproducible builds. The kernel returns entries in whatever order the filesystem yields, which varies with creation history and differs between machines. A build that globs a source directory and compiles in the order returned produces a different link order, and sometimes a different binary, on a different host.</p>
+
+<p><code class="inline">deterministic_dirs</code> sorts <code class="inline">readdir()</code> results lexicographically, so <code class="inline">ls</code>, shell globs, <code class="inline">os.listdir</code>, and anything else built on <code class="inline">getdents64</code> return a stable order across runs and across machines.</p>
+
+<h2>Address-space layout</h2>
+
+<p><code class="inline">no_randomize_memory</code> disables ASLR for the child via <code class="inline">personality(ADDR_NO_RANDOMIZE)</code>. Addresses become stable across runs, which is what you want when comparing crash dumps, diffing memory profiles, or chasing a bug that only reproduces at a particular layout.</p>
+
+<div class="callout">
+    <i data-lucide="info"></i>
+    <div class="callout-body">
+        <p><strong>This weakens a hardening measure.</strong> ASLR exists to make memory-corruption exploits harder. Turning it off inside a sandbox is a reasonable trade for a build or a debugging session; leaving it off for a workload whose job is to run untrusted code is not. Enable it for the run that needs reproducibility, not as a default.</p>
+    </div>
+</div>
+
+<h2>Putting it together</h2>
+
+<p>For a reproducible build, the four combine with the copy-on-write layer: pin the inputs, and let COW show you exactly what came out.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">A reproducible build profile</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code>[determinism]
+random_seed         = 42
+time_start          = <span class="s">"2000-01-01T00:00:00Z"</span>
+deterministic_dirs  = <span class="k">true</span>
+no_randomize_memory = <span class="k">true</span>
+
+[config]
+workdir = <span class="s">"/src"</span>
+
+[program]
+exec      = <span class="s">"make"</span>
+args      = [<span class="s">"-j4"</span>]
+clean_env = <span class="k">true</span>
+env       = { CC = <span class="s">"gcc"</span>, LANG = <span class="s">"C.UTF-8"</span>, TZ = <span class="s">"UTC"</span> }
+
+[filesystem]
+read  = [<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/lib64"</span>, <span class="s">"/bin"</span>, <span class="s">"/etc"</span>]
+write = [<span class="s">"/src"</span>]</code></pre>
+</div>
+
+<p><code class="inline">clean_env</code> belongs in that list as much as the determinism knobs do. An inherited environment carries hostnames, paths, and locale settings that leak into build output, and starting from a minimal one removes a whole class of differences the four knobs above never touch.</p>
+
+<div class="code-block">
+    <div class="code-block-header">
+        <span class="code-block-title">Verify it: same inputs, same tree</span>
+        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
+    </div>
+<pre><code><span class="c"># Run twice under dry-run and compare the reported changes.</span>
+<span class="c"># Neither run touches the source tree.</span>
+<span class="p">$</span> <span class="k">sandlock run</span> -p repro --dry-run -- make build &gt; run-a.txt
+<span class="p">$</span> <span class="k">sandlock run</span> -p repro --dry-run -- make build &gt; run-b.txt
+<span class="p">$</span> <span class="k">diff</span> run-a.txt run-b.txt</code></pre>
+</div>
+
+<h2>What is not pinned</h2>
+
+<p>The four knobs cover the sources Sandlock can reach. Several common ones remain your responsibility:</p>
+
+<ul>
+    <li><strong>Process and thread scheduling.</strong> Interleaving still varies. A build whose output depends on which worker finished first is not made reproducible by anything here.</li>
+    <li><strong>PIDs and timing-derived identifiers.</strong> A program that embeds its own PID, or a name derived from wall-clock nanoseconds, still varies.</li>
+    <li><strong>Hostname and environment.</strong> Use <code class="inline">--name</code> for a stable virtual hostname and <code class="inline">--clean-env</code> for the environment.</li>
+    <li><strong>Filesystem timestamps.</strong> Existing files keep their real mtimes; the frozen clock applies to what the sandbox reads, not to what is already on disk.</li>
+    <li><strong>Network responses.</strong> Obviously. A reproducible build should have no network at all, which is the default.</li>
+</ul>
+
+<p>See the <a href="/docs/reference.html#determinism">reference</a> for the field types and defaults, and <a href="/docs/profiles.html">Profiles</a> for saving a configuration like the one above.</p>
