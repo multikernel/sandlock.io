@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "Enterprise"
-description: "The Sandlock core is open source and free. What we sell sits on top of it: the Sandbox HTTP API, and the Sandbox Scheduler, which places agent sandboxes by checkpoint and restore instead of by reservation."
+description: "The Sandlock core is open source and free. What we sell sits on top of it: the Sandbox HTTP API and the Sandbox Scheduler, licensed software deployed into your cloud account or data center, not a shared cloud."
 permalink: /enterprise.html
 ---
 
@@ -246,7 +246,7 @@ permalink: /enterprise.html
             <span>Commercial offering</span>
         </div>
         <h1>The Core Is Free. The API Above It Is the Product.</h1>
-        <p class="subtitle">Sandlock itself is Apache-2.0 and complete: no paywalled flag, no enterprise-only feature, no runtime that phones home. What we sell sits on top of it: the Sandbox HTTP API, and the Sandbox Scheduler, which runs agent sandboxes at a fraction of the memory a reservation would hold.</p>
+        <p class="subtitle">Sandlock itself is Apache-2.0 and complete: no paywalled flag, no enterprise-only feature, no runtime that phones home. What we sell sits on top of it: the Sandbox HTTP API, and the Sandbox Scheduler, which runs agent sandboxes at a fraction of the memory a reservation would hold. Both deploy into your cloud account or your data center; we do not operate a shared cloud.</p>
     </div>
 </section>
 
@@ -395,6 +395,42 @@ permalink: /enterprise.html
             </div>
         </div>
 
+    </div>
+</section>
+
+<section class="section section-alt" id="deployment">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="cloud"></i>
+                <span>Deployment model</span>
+            </div>
+            <h2 class="section-title">Your Infrastructure, Not a Shared Cloud</h2>
+            <p class="section-subtitle">Sandlock confines with the kernel it shares, so the party operating the kernel should be the party whose risk it is. We sell software that runs where your workloads already live; we do not run a multi-tenant cloud.</p>
+        </div>
+
+        <div class="fit-grid">
+            <div class="fit">
+                <i data-lucide="cloud"></i>
+                <h3>Bring your own cloud</h3>
+                <p>The API, the Scheduler, and every node run in your AWS, GCP, or Azure account, inside your VPC. Workloads, checkpoints, and credentials never leave your trust boundary.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="shield-half"></i>
+                <h3>Why there is no hosted tier</h3>
+                <p>A shared cloud would put every customer on kernels we operate, with cross-tenant isolation resting on a boundary we tell you plainly is not a hypervisor. That trade is not ours to make for you.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="server"></i>
+                <h3>Or your own metal</h3>
+                <p>Nothing in the stack needs KVM, so it runs inside cloud VMs where nested virtualization is unavailable, and on bare metal in your data center where a cloud account is not an option.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="layers"></i>
+                <h3>Compose with a harder boundary</h3>
+                <p>When a tenant of yours needs a kernel boundary, run Sandlock inside per-tenant VMs. The hypervisor separates your tenants; the Scheduler still packs density within each one.</p>
+            </div>
+        </div>
     </div>
 </section>
 
