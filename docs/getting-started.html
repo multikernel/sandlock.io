@@ -10,7 +10,7 @@ lede: "Check the kernel, build from source, run something confined. If your host
 
 <h2>Requirements</h2>
 
-<p>Sandlock targets <strong>Linux 6.12 or later</strong>, which is where Landlock ABI v6 lands. Building it needs <strong>Rust 1.70 or later</strong>. The Python SDK needs <strong>Python 3.8 or later</strong> and is optional.</p>
+<p>Sandlock enforces its full protection set on <strong>Linux 6.12 or later</strong>, which is where Landlock ABI v6 lands. That is the default strict posture, not a hard floor: on older kernels, individual protections can be waived per policy. Building it needs <strong>Rust 1.70 or later</strong>. The Python SDK needs <strong>Python 3.8 or later</strong> and is optional.</p>
 
 <p>You do not need root, cgroups, user namespaces, a container runtime, or KVM.</p>
 

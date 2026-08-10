@@ -340,8 +340,8 @@ permalink: /comparison.html
 
             <div class="not-for-item">
                 <h3>Your kernel is older than 6.12</h3>
-                <p>Landlock ABI v6 lands in 6.12, and the strict default refuses to start without the protections it expects.</p>
-                <p class="instead"><b>Use instead</b>Sandlock with protections degraded per policy, accepting that each one waived is confinement you no longer have.</p>
+                <p>Landlock ABI v6 lands in 6.12, and the strict default refuses to start without the protections it expects. Usually only the two v6 IPC scopes are at stake; every earlier protection has its own, lower kernel floor.</p>
+                <p class="instead"><b>Use instead</b>Sandlock with the missing protections <a href="/docs/protections.html">degraded per policy</a>, accepting that each one waived is confinement you no longer have.</p>
             </div>
 
             <div class="not-for-item">
