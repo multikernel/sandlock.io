@@ -268,8 +268,7 @@ permalink: /enterprise.html
                     <span class="tag">Apache-2.0</span>
                 </div>
                 <div class="layer-body">
-                    <p>The sandbox itself: Landlock, seccomp-bpf, the supervisor, copy-on-write, the network and HTTP ACLs, credential injection, and the handler API. Every interface, from the CLI through Python, Rust, Go, the OCI runtime, and the MCP server, is in the open-source project.</p>
-                    <p><strong>Nothing on this site's documentation is gated.</strong> Apache-2.0, patent grant included, free at any scale. If you run Sandlock on your own machines and never talk to us, that is a supported outcome, not a trial.</p>
+                    <p>The sandbox itself: Landlock, seccomp-bpf, the supervisor, copy-on-write, the ACLs, credential injection, the handler API, and every interface from the CLI through the SDKs, the OCI runtime, and the MCP server. <strong>Nothing is gated.</strong> Apache-2.0 with patent grant, free at any scale; running it forever without talking to us is a supported outcome, not a trial.</p>
                 </div>
             </div>
 
@@ -279,8 +278,7 @@ permalink: /enterprise.html
                     <span class="tag commercial">Commercial</span>
                 </div>
                 <div class="layer-body">
-                    <p>An HTTP API over the core API, plus client SDKs. It turns a local library call into a remote one: create a sandbox from a container image, run commands in it, move files in and out, checkpoint it, and reconnect to it later from a different process or a different machine.</p>
-                    <p>This is the layer where sandboxes stop being a function call and start being <strong>infrastructure with identity, lifetime, and access control</strong>.</p>
+                    <p>An HTTP API over the core, plus client SDKs: create a sandbox from a container image, run commands in it, move files in and out, checkpoint it, and reconnect later from another process or machine. The layer where sandboxes stop being a function call and start being <strong>infrastructure with identity, lifetime, and access control</strong>.</p>
                 </div>
             </div>
 
@@ -290,8 +288,7 @@ permalink: /enterprise.html
                     <span class="tag commercial">Commercial</span>
                 </div>
                 <div class="layer-body">
-                    <p>Places sandboxes across a fleet. It treats a sandbox's home as a checkpoint store rather than a node, so a node lends memory for the duration of a call and takes it back afterwards.</p>
-                    <p>For a workload that is idle over 99% of the time, that difference is the entire economics of running it.</p>
+                    <p>Places sandboxes across a fleet, treating a sandbox's home as a checkpoint store rather than a node: a node lends memory for the duration of a call and takes it back afterwards. For a workload that is idle over 99% of the time, that difference is the entire economics of running it.</p>
                 </div>
             </div>
         </div>
@@ -311,16 +308,12 @@ permalink: /enterprise.html
 
         <div class="cap-grid">
             <div class="cap">
-                <h3><i data-lucide="globe"></i>Any language, over HTTP</h3>
-                <p>The core is Rust with bindings. The API is a REST surface with an API key, so a caller needs no Landlock, no Linux, and no FFI.</p>
+                <h3><i data-lucide="globe"></i>Any language, with scoped keys</h3>
+                <p>A REST surface, so a caller needs no Landlock, no Linux, and no FFI. Keys carry fine-grained scopes across create, exec, files, checkpoints, and MCP, with per-key usage accounting.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="save"></i>Sandboxes that outlive the call</h3>
-                <p>A sandbox has an id and persists across runs. Files written by one call are there for the next. Disconnect, then reconnect from another process entirely.</p>
-            </div>
-            <div class="cap">
-                <h3><i data-lucide="camera"></i>Checkpoint and restore</h3>
-                <p>Save a named checkpoint, stop the sandbox, and bring it back later. The same mechanism the Sandbox Scheduler uses to move a sandbox between nodes.</p>
+                <p>A sandbox has an id, persists across runs, and can be reconnected from another process entirely. Named checkpoints stop it and bring it back later, the same mechanism the Scheduler uses to move it between nodes.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="container"></i>Container images as the rootfs</h3>
@@ -333,10 +326,6 @@ permalink: /enterprise.html
             <div class="cap">
                 <h3><i data-lucide="bot"></i>Remote MCP</h3>
                 <p>Native MCP transports, so Claude Desktop, Cursor, or any MCP client points at the API directly. Register your own Python tools; each call runs in its own sandbox.</p>
-            </div>
-            <div class="cap">
-                <h3><i data-lucide="key-round"></i>Scoped keys and usage</h3>
-                <p>Keys carry fine-grained scopes covering create, exec, read, files, checkpoints, tools, and MCP, with per-key usage accounting behind them.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="git-branch"></i>Pipelines across stages</h3>
@@ -378,19 +367,11 @@ permalink: /enterprise.html
         <p class="table-note" style="color: rgba(255,255,255,0.4); text-align: center; max-width: 70ch; margin-left: auto; margin-right: auto;">Modelled from the duty cycle. Send us your session count, concurrency, and idle profile and we will size it against your workload.</p>
 
         <div style="max-width: 76ch; margin: var(--space-16) auto 0;">
-            <h3 style="font-size: var(--text-lg); font-weight: 700; color: white; margin-bottom: var(--space-5);">How it works</h3>
+            <h3 style="font-size: var(--text-lg); font-weight: 700; color: white; margin-bottom: var(--space-5);">How it works, and what that changes</h3>
             <div class="capability-features">
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>The session lives in the store, not on a node.</strong> Nodes write an incremental checkpoint whenever the sandbox goes quiet, so the authoritative copy is never the one in someone's RAM.</span></div>
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>A request restores it wherever there is room.</strong> Clients see latency, never an allocation step. Cold starts are sub-second because creating a sandbox is itself a restore, from a golden template.</span></div>
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>Idle memory goes back.</strong> Residency is graded: a brief pause sinks the sandbox to local storage, a longer one returns it to the store.</span></div>
-            </div>
-
-            <h3 style="font-size: var(--text-lg); font-weight: 700; color: white; margin: var(--space-12) 0 var(--space-5);">What that changes operationally</h3>
-            <div class="capability-features">
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>Node failure is not an incident.</strong> Failover, eviction, and rebalancing are the same path: the next request restores the session somewhere else. It runs constantly rather than only when something breaks.</span></div>
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>Overcommit is safe.</strong> A node with no headroom refuses and the router moves on, so you can pack hosts without a bad guess becoming an outage.</span></div>
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>Forking a session is free.</strong> Restore one checkpoint any number of times under fresh ids, which is what best-of-N sampling and tree search need.</span></div>
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>Routers are disposable.</strong> They hold no durable state, so run as many as you like behind a load balancer with no leader election or placement table to keep honest.</span></div>
+                <div class="feature-item"><i data-lucide="check"></i><span><strong>The session lives in the store, not on a node.</strong> Nodes write an incremental checkpoint whenever the sandbox goes quiet; a request restores it wherever there is room, sub-second, because creating a sandbox is itself a restore from a golden template. Idle memory goes back in graded steps.</span></div>
+                <div class="feature-item"><i data-lucide="check"></i><span><strong>Node failure is not an incident.</strong> Failover, eviction, and rebalancing are the same path: the next request restores the session somewhere else. A node with no headroom refuses and the router moves on, so overcommit cannot become an outage.</span></div>
+                <div class="feature-item"><i data-lucide="check"></i><span><strong>Forking a session is free.</strong> Restore one checkpoint any number of times under fresh ids, which is what best-of-N sampling and tree search need. Routers hold no durable state, so run as many as you like.</span></div>
                 <div class="feature-item"><i data-lucide="minus"></i><span><strong>Two things do not move with a session.</strong> TCP connections drop on relocation and GPU state does not checkpoint cleanly, so plan long-lived connections and GPU work around that boundary.</span></div>
             </div>
         </div>
@@ -412,23 +393,23 @@ permalink: /enterprise.html
         <div class="fit-grid">
             <div class="fit">
                 <i data-lucide="cloud"></i>
-                <h3>Bring your own cloud</h3>
-                <p>The API, the Scheduler, and every node run in your AWS, GCP, or Azure account, inside your VPC. Workloads, checkpoints, and credentials never leave your trust boundary.</p>
+                <h3>Your cloud or your metal</h3>
+                <p>The API, the Scheduler, and every node run in your AWS, GCP, or Azure account, or on bare metal in your data center. Nothing needs KVM, so cloud VMs without nested virtualization are fine, and workloads, checkpoints, and credentials never leave your trust boundary.</p>
             </div>
             <div class="fit">
                 <i data-lucide="shield-half"></i>
                 <h3>Why there is no hosted tier</h3>
-                <p>A shared cloud would put every customer on kernels we operate, with cross-tenant isolation resting on a boundary we tell you plainly is not a hypervisor. That trade is not ours to make for you.</p>
+                <p>A shared cloud would put every customer on kernels we operate, with cross-tenant isolation resting on a boundary we tell you plainly is not a hypervisor. When a tenant of yours needs that boundary, put per-tenant VMs underneath; the Scheduler still packs density within each one.</p>
             </div>
             <div class="fit">
-                <i data-lucide="server"></i>
-                <h3>Or your own metal</h3>
-                <p>Nothing in the stack needs KVM, so it runs inside cloud VMs where nested virtualization is unavailable, and on bare metal in your data center where a cloud account is not an option.</p>
+                <i data-lucide="plug"></i>
+                <h3>If we disappear, nothing stops</h3>
+                <p>Nothing in your stack calls a service we operate: no hosted control plane, no license server, no telemetry endpoint. An outage of ours cannot become an outage of yours, and leaving involves no export, because we hold nothing to give back.</p>
             </div>
             <div class="fit">
                 <i data-lucide="layers"></i>
-                <h3>Compose with a harder boundary</h3>
-                <p>When a tenant of yours needs a kernel boundary, run Sandlock inside per-tenant VMs. The hypervisor separates your tenants; the Scheduler still packs density within each one.</p>
+                <h3>The exit is open source</h3>
+                <p>Drop the commercial layers and the complete Apache-2.0 core remains yours: the sandbox, every SDK, the CLI, the OCI runtime, and the MCP server. The confinement your platform rests on is not ours to take away.</p>
             </div>
         </div>
     </div>
