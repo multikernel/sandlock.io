@@ -245,8 +245,8 @@ permalink: /enterprise.html
             <i data-lucide="cloud"></i>
             <span>Commercial offering</span>
         </div>
-        <h1>Run a Fleet of Sandboxes Without a Fleet of Machines</h1>
-        <p class="subtitle">The open-source core confines a process. The commercial layer operates a fleet: the Sandbox HTTP API turns sandboxes into remote infrastructure with identity and access control, and the Sandbox Scheduler fits a thousand agent sessions into the memory a reservation model spends on twenty. Both run in your cloud, your data center, your trust boundary.</p>
+        <h1>Operate Sandboxes at Fleet Scale, on Your Infrastructure</h1>
+        <p class="subtitle">The open-source core confines a process. The commercial layer operates a fleet: the Sandbox HTTP API exposes sandboxes as remote infrastructure with identity and access control, and the Sandbox Scheduler fits a thousand agent sessions into the memory a reservation model spends on twenty. Both deploy into your cloud account or your data center, inside your trust boundary.</p>
     </div>
 </section>
 
@@ -257,8 +257,8 @@ permalink: /enterprise.html
                 <i data-lucide="layers"></i>
                 <span>The split</span>
             </div>
-            <h2 class="section-title">The Core Is Free. The Layers Above It Are the Product.</h2>
-            <p class="section-subtitle">Everything that confines a process is open source. Everything that operates a fleet of them is the product. No paywalled flags, no enterprise-only features, no runtime that phones home.</p>
+            <h2 class="section-title">Open Source at the Core, Commercial at the Fleet Layer</h2>
+            <p class="section-subtitle">Everything that confines a process is open source. Everything that operates a fleet of sandboxes is licensed. There are no paywalled flags, no enterprise-only features, and no runtime that phones home.</p>
         </div>
 
         <div class="layer-stack">
@@ -268,7 +268,7 @@ permalink: /enterprise.html
                     <span class="tag">Apache-2.0</span>
                 </div>
                 <div class="layer-body">
-                    <p>The sandbox itself: Landlock, seccomp-bpf, the supervisor, copy-on-write, the ACLs, credential injection, the handler API, and every interface from the CLI through the SDKs, the OCI runtime, and the MCP server. <strong>Nothing is gated.</strong> Apache-2.0 with patent grant, free at any scale; running it forever without talking to us is a supported outcome, not a trial.</p>
+                    <p>The sandbox itself: Landlock, seccomp-bpf, the supervisor, copy-on-write, the ACLs, credential injection, the handler API, and every interface from the CLI through the SDKs, the OCI runtime, and the MCP server. <strong>Nothing is gated.</strong> Apache-2.0 and free at any scale; teams run it in production indefinitely with no commercial relationship, and that is by design.</p>
                 </div>
             </div>
 
@@ -288,7 +288,7 @@ permalink: /enterprise.html
                     <span class="tag commercial">Commercial</span>
                 </div>
                 <div class="layer-body">
-                    <p>Places sandboxes across a fleet, treating a sandbox's home as a checkpoint store rather than a node: a node lends memory for the duration of a call and takes it back afterwards. For a workload that is idle over 99% of the time, that difference is the entire economics of running it.</p>
+                    <p>Places sandboxes across a fleet, treating the checkpoint store rather than a node as a sandbox's home: a node lends memory for the duration of a call and reclaims it afterwards. For a workload that is idle more than 99% of the time, that difference sets the economics of running it.</p>
                 </div>
             </div>
         </div>
@@ -302,8 +302,8 @@ permalink: /enterprise.html
                 <i data-lucide="webhook"></i>
                 <span>HTTP API</span>
             </div>
-            <h2 class="section-title">Sandboxes as a Service, on Your Own Servers</h2>
-            <p class="section-subtitle">Everything you need the moment there is more than one machine, more than one tenant, or more than one call.</p>
+            <h2 class="section-title">A Sandbox Service Running on Your Own Servers</h2>
+            <p class="section-subtitle">The capabilities that matter the moment there is more than one machine, more than one tenant, or more than one caller.</p>
         </div>
 
         <div class="cap-grid">
@@ -313,7 +313,7 @@ permalink: /enterprise.html
             </div>
             <div class="cap">
                 <h3><i data-lucide="save"></i>Sandboxes that outlive the call</h3>
-                <p>A sandbox has an id, persists across runs, and can be reconnected from another process entirely. Named checkpoints stop it and bring it back later, the same mechanism the Scheduler uses to move it between nodes.</p>
+                <p>A sandbox has a stable ID, persists across runs, and can be reconnected from a different process or machine. Named checkpoints stop it and restore it later, the same mechanism the Scheduler uses to move it between nodes.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="container"></i>Container images as the rootfs</h3>
@@ -346,8 +346,8 @@ permalink: /enterprise.html
                 <i data-lucide="cpu"></i>
                 <span>Sandbox Scheduler</span>
             </div>
-            <h2 class="section-title">Stop Paying for Sandboxes That Are Doing Nothing</h2>
-            <p class="section-subtitle">An agent session spends almost all of its life waiting on the model. Reserve a node for it and you pay for that wait. The Sandbox Scheduler keeps the session in a checkpoint store and hands it node memory only while it is actually running.</p>
+            <h2 class="section-title">Provision for Execution, Not for Idle Sessions</h2>
+            <p class="section-subtitle">An agent session spends nearly all of its life waiting on the model, and a reservation model pays for that wait. The Sandbox Scheduler keeps each session in a checkpoint store and assigns node memory only while the session is executing.</p>
         </div>
 
         <div class="claim-row">
@@ -358,17 +358,17 @@ permalink: /enterprise.html
             </div>
             <div class="claim">
                 <span class="n">42 GB</span>
-                <h3>What it actually takes</h3>
+                <h3>Actual footprint</h3>
                 <p>Around ten are executing at any instant. Provision for a p99.9 of concurrent live sandboxes and the same thousand sessions fit in 42 GB.</p>
             </div>
             <div class="claim">
                 <span class="n">~48&times;</span>
                 <h3>More sessions per host</h3>
-                <p>The ratio grows with fleet size, towards 91&times; at a hundred thousand sessions, because concurrency averages out.</p>
+                <p>The ratio grows with fleet size, approaching 91&times; at a hundred thousand sessions, because concurrency averages out.</p>
             </div>
         </div>
 
-        <p class="table-note" style="color: rgba(255,255,255,0.4); text-align: center; max-width: 70ch; margin-left: auto; margin-right: auto;">Modelled from the duty cycle. Send us your session count, concurrency, and idle profile and we will size it against your workload.</p>
+        <p class="table-note" style="color: rgba(255,255,255,0.4); text-align: center; max-width: 70ch; margin-left: auto; margin-right: auto;">Figures are modelled from the duty cycle. Send us your session count, concurrency, and idle profile, and we will size the deployment against your workload.</p>
 
         <div style="max-width: 76ch; margin: var(--space-16) auto 0;">
             <h3 style="font-size: var(--text-lg); font-weight: 700; color: white; margin-bottom: var(--space-5);">How it works, and what that changes</h3>
@@ -397,7 +397,7 @@ permalink: /enterprise.html
         <div class="fit-grid">
             <div class="fit">
                 <i data-lucide="cloud"></i>
-                <h3>Your cloud or your metal</h3>
+                <h3>Your cloud account or your data center</h3>
                 <p>The API, the Scheduler, and every node run in your AWS, GCP, or Azure account, or on bare metal in your data center. Nothing needs KVM, so cloud VMs without nested virtualization are fine, and workloads, checkpoints, and credentials never leave your trust boundary.</p>
             </div>
             <div class="fit">
@@ -407,12 +407,12 @@ permalink: /enterprise.html
             </div>
             <div class="fit">
                 <i data-lucide="plug"></i>
-                <h3>If we disappear, nothing stops</h3>
-                <p>Nothing in your stack calls a service we operate: no hosted control plane, no license server, no telemetry endpoint. An outage of ours cannot become an outage of yours, and leaving involves no export, because we hold nothing to give back.</p>
+                <h3>No operational dependency on us</h3>
+                <p>Nothing in your stack calls a service we operate: no hosted control plane, no license server, no telemetry endpoint. An outage of ours cannot become an outage of yours, and offboarding requires no data export, because we hold nothing of yours.</p>
             </div>
             <div class="fit">
                 <i data-lucide="layers"></i>
-                <h3>The exit is open source</h3>
+                <h3>An open-source exit path</h3>
                 <p>Drop the commercial layers and the complete Apache-2.0 core remains yours: the sandbox, every SDK, the CLI, the OCI runtime, and the MCP server. The confinement your platform rests on is not ours to take away.</p>
             </div>
         </div>
@@ -457,14 +457,14 @@ permalink: /enterprise.html
 
 <section class="cta-band">
     <div class="cta-band-inner" style="max-width: 940px;">
-        <h2>Take It Beyond One Machine</h2>
+        <h2>Evaluate It Against Your Workload</h2>
         <p>When sandboxes become a fleet, the API and the Scheduler turn them into infrastructure you can operate: many tenants, many machines, and a memory bill that tracks work done rather than sessions held.</p>
 
         <div class="cta-steps">
             <div class="cta-step">
                 <span class="n">01</span>
                 <h3>A technical call</h3>
-                <p>Thirty minutes with the CEO rather than a salesperson. Bring the workload.</p>
+                <p>A thirty-minute engineering discussion with the CEO, not a sales pitch. Bring the workload.</p>
             </div>
             <div class="cta-step">
                 <span class="n">02</span>
