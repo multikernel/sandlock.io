@@ -15,7 +15,7 @@ lede: "An MCP server whose tools execute inside a Landlock and seccomp sandbox, 
         <span class="code-block-title">shell</span>
         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
     </div>
-<pre><code><span class="p">$</span> <span class="k">cd</span> python &amp;&amp; <span class="k">pip install</span> -e <span class="s">'.[mcp]'</span>
+<pre><code><span class="p">$</span> <span class="k">pip install</span> <span class="s">'sandlock[mcp]'</span>
 
 <span class="c"># local, stdio transport</span>
 <span class="p">$</span> <span class="k">sandlock-mcp</span> --workspace /tmp/sandbox
