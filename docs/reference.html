@@ -259,7 +259,7 @@ num_cpus    = 2</code></pre>
 
 <p>Outbound allowlist, bind allowlist, and port virtualization. Each <code class="inline">net_allow</code> entry is a rule naming protocol, host, and port. Rules are OR'd, and an empty <code class="inline">net_allow</code> denies all outbound traffic.</p>
 
-<p>Protocol gating falls out of rule presence: without a UDP rule, UDP socket creation is denied at the seccomp layer; without an ICMP rule, kernel ping socket creation is denied. A scheme-less rule counts for both TCP and UDP; ICMP always needs <code class="inline">icmp://</code>. Raw ICMP (<code class="inline">SOCK_RAW</code> + <code class="inline">IPPROTO_ICMP</code>) is never exposed.</p>
+<p>Protocol gating falls out of rule presence: without a UDP rule, the workload cannot create UDP sockets; without an ICMP rule, it cannot create ping sockets. A scheme-less rule counts for both TCP and UDP; ICMP always needs <code class="inline">icmp://</code>. Raw ICMP (<code class="inline">SOCK_RAW</code> + <code class="inline">IPPROTO_ICMP</code>) is never exposed.</p>
 
 <h3>Rule shapes</h3>
 
@@ -284,13 +284,13 @@ num_cpus    = 2</code></pre>
         <tbody>
             <tr><th scope="row"><code>net_allow</code></th><td><code>allow</code></td><td><code>Sequence[str]</code></td><td><code>()</code></td><td>Outbound endpoint allowlist. Empty denies all outbound.</td></tr>
             <tr><th scope="row"><code>net_allow_bind</code></th><td><code>allow_bind</code></td><td><code>Sequence[int | str]</code></td><td><code>()</code></td><td>TCP ports the sandbox may bind or listen on; a default-deny allowlist. Each entry is a port or a <code>"lo-hi"</code> range; <code>"*"</code> allows any port and cannot be mixed with port entries. Landlock ABI v4+, TCP only (UDP <code>bind()</code> is not separately gated). Mutually exclusive with <code>net_deny_bind</code>.</td></tr>
-            <tr><th scope="row"><code>net_deny_bind</code></th><td><code>deny_bind</code></td><td><code>Sequence[int | str]</code></td><td><code>()</code></td><td>TCP ports the sandbox may not bind; a default-allow denylist. Same port syntax, enforced on the on-behalf <code>bind()</code> path with Landlock's <code>BIND_TCP</code> relaxed. Mutually exclusive with <code>net_allow_bind</code>.</td></tr>
-            <tr><th scope="row"><code>port_remap</code></th><td><code>port_remap</code></td><td><code>bool</code></td><td><code>False</code></td><td>Transparent TCP port virtualization. Each sandbox gets an independent virtual port space; conflicting binds are remapped to unique real ports via <code>pidfd_getfd</code>.</td></tr>
+            <tr><th scope="row"><code>net_deny_bind</code></th><td><code>deny_bind</code></td><td><code>Sequence[int | str]</code></td><td><code>()</code></td><td>TCP ports the sandbox may not bind; a default-allow denylist. Same port syntax as <code>net_allow_bind</code>. Mutually exclusive with <code>net_allow_bind</code>.</td></tr>
+            <tr><th scope="row"><code>port_remap</code></th><td><code>port_remap</code></td><td><code>bool</code></td><td><code>False</code></td><td>Transparent TCP port virtualization. Each sandbox gets an independent virtual port space; conflicting binds are remapped to unique real ports.</td></tr>
         </tbody>
     </table>
 </div>
 
-<p>Hostnames are resolved once at sandbox creation and pinned via a synthetic <code class="inline">/etc/hosts</code>, which is injected only when at least one rule references a concrete host. Rules made purely of <code class="inline">:port</code>, <code class="inline">udp://*:*</code>, or <code class="inline">icmp://*</code> leave the host's real DNS configuration visible. The complete grammar is on the <a href="/docs/network.html">network model page</a>.</p>
+<p>Hostnames are resolved once at sandbox creation and pinned via a synthetic <code class="inline">/etc/hosts</code>, which is injected only when at least one rule references a concrete host. Rules made purely of <code class="inline">:port</code>, <code class="inline">udp://*:*</code>, or <code class="inline">icmp://*</code> leave the host's real DNS configuration visible. The complete grammar is on the <a href="/docs/network.html">network policy guide</a>.</p>
 
 <h2>http</h2>
 
@@ -516,7 +516,7 @@ parse_ports([80, <span class="s">"443"</span>, <span class="s">"8000-8005"</span
 <h2>Behavioural notes</h2>
 
 <ol>
-    <li><strong>Default-deny network.</strong> <code class="inline">net_allow=()</code>, the default, denies all outbound traffic. Protocol gating is a function of rule presence: the seccomp layer denies UDP and ICMP socket creation when no rule of that protocol is configured.</li>
+    <li><strong>Default-deny network.</strong> <code class="inline">net_allow=()</code>, the default, denies all outbound traffic. Protocol gating is a function of rule presence: without a matching rule, the workload cannot create UDP or ICMP sockets.</li>
     <li><strong>Seccomp COW with <code class="inline">workdir</code>.</strong> When <code class="inline">workdir</code> is set, the COW path intercepts writes underneath it and stages them in an upper layer, committed or aborted on exit according to <code class="inline">on_exit</code> and <code class="inline">on_error</code>.</li>
     <li><strong>HTTP host auto-expansion.</strong> HTTP rules referencing concrete hosts auto-add corresponding TCP entries on <code class="inline">http_ports</code>, and on 443 when <code class="inline">http_ca</code> is set. Wildcard hosts add the equivalent any-IP entries. All auto-added entries are TCP.</li>
     <li><strong>TOCTOU and <code class="inline">policy_fn</code>.</strong> Path strings are never exposed on policy events, because seccomp user notification re-reads user-memory pointers after a continue verdict. Path-based control belongs in static Landlock rules, or in <code class="inline">ctx.deny_path()</code> for runtime additions. <code class="inline">event.argv</code> is exposed and is TOCTOU-safe: the supervisor freezes peer tasks before exposing it.</li>

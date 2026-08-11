@@ -15,7 +15,7 @@ groups:
       - url: /docs/filesystem.html
         title: Filesystem and COW
       - url: /docs/network.html
-        title: Network Model
+        title: Network Policy
       - url: /docs/http-acl.html
         title: HTTP ACL and Credentials
       - url: /docs/resources.html
