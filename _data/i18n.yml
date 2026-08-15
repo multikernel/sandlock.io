@@ -24,6 +24,8 @@ en:
     reference_sub: Every policy field and default
     sdks: SDKs
     sdks_sub: Python, Rust, Go, and MCP
+    faq: FAQ
+    faq_sub: Docker, capabilities, common errors
     products: Products
     http_api: Sandbox HTTP API
     http_api_sub: Remote execution over an HTTP API

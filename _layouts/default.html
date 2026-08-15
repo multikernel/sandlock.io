@@ -70,7 +70,7 @@
                 </div>
 
                 <div class="site-nav-dropdown">
-                    <button class="site-nav-dropdown-trigger {% if url contains '/docs/' %}active{% endif %}" aria-haspopup="true">
+                    <button class="site-nav-dropdown-trigger {% if url contains '/docs/' or url == '/faq.html' %}active{% endif %}" aria-haspopup="true">
                         {{ t.nav.docs }}
                         <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
                     </button>
@@ -89,6 +89,9 @@
                         </a>
                         <a href="/docs/reference.html" class="site-nav-dropdown-item {% if url == '/docs/reference.html' %}active{% endif %}">
                             {{ t.nav.reference }}<small>{{ t.nav.reference_sub }}</small>
+                        </a>
+                        <a href="/faq.html" class="site-nav-dropdown-item {% if url == '/faq.html' %}active{% endif %}">
+                            {{ t.nav.faq }}<small>{{ t.nav.faq_sub }}</small>
                         </a>
                     </div>
                 </div>
@@ -142,6 +145,7 @@
             <a href="/docs/cli.html" class="site-mobile-link {% if url == '/docs/cli.html' %}active{% endif %}">{{ t.nav.cli }}</a>
             <a href="/docs/python.html" class="site-mobile-link {% if url == '/docs/python.html' %}active{% endif %}">Python SDK</a>
             <a href="/docs/reference.html" class="site-mobile-link {% if url == '/docs/reference.html' %}active{% endif %}">{{ t.nav.reference }}</a>
+            <a href="/faq.html" class="site-mobile-link {% if url == '/faq.html' %}active{% endif %}">{{ t.nav.faq }}</a>
 
             <div class="site-mobile-heading">{{ t.nav.products }}</div>
             <a href="/enterprise.html" class="site-mobile-link {% if url == '/enterprise.html' %}active{% endif %}">{{ t.nav.products_overview }}</a>
@@ -211,6 +215,7 @@
                             <li><a href="/docs/rust.html">Rust API</a></li>
                             <li><a href="/docs/go.html">Go SDK</a></li>
                             <li><a href="/docs/reference.html">Sandbox Reference</a></li>
+                            <li><a href="/faq.html">FAQ</a></li>
                         </ul>
                     </div>
 
