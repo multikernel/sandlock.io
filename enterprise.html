@@ -4,6 +4,15 @@ title: "Sandbox HTTP API and Scheduler for Fleets"
 description: "The Sandlock core is open source. On top of it we license the Sandbox HTTP API and Sandbox Scheduler, deployed into your own cloud account or data center."
 permalink: /enterprise.html
 last_modified_at: 2026-08-28
+faq:
+  - q: "Sandlock shares the host kernel. Is that acceptable for untrusted code?"
+    a: "It is the boundary Sandlock offers, and the security model says so plainly. Landlock and seccomp are kernel-enforced allowlists, TOCTOU-safe, and stronger than any userspace wrapper, but a kernel exploit is a shared risk. If your threat model prices in a burned kernel 0-day, run Sandlock inside the VM boundary you already trust; the Scheduler packs density inside each boundary rather than replacing it."
+  - q: "Why not Firecracker, or a hosted sandbox cloud?"
+    a: "Firecracker needs KVM and holds memory for every idle microVM, which is most of them. Hosted sandbox clouds move your customers' code onto a kernel someone else operates and meter every call. Sandlock runs unprivileged on ordinary cloud VMs, in your account, and the Scheduler assigns memory only while a session is executing."
+  - q: "Our fleet is not on Linux 6.12 yet."
+    a: "The strict default refuses to start when a Landlock protection is missing, because silently weaker confinement is worse than a loud failure. Each protection can be waived explicitly and is reported in the posture evidence, and the OCI runtime tolerates older kernels. Bring the kernel mix to the technical call."
+  - q: "What happens if we stop paying?"
+    a: "The HTTP API and Scheduler stop being licensed. Everything under them keeps working: the sandbox, every SDK, the CLI, the OCI runtime, and the MCP server are Apache-2.0, and there is no license server or telemetry endpoint that could cut you off. Offboarding needs no data export because we hold nothing of yours."
 ---
 
 <style>
@@ -220,6 +229,34 @@ last_modified_at: 2026-08-28
     margin: 0;
 }
 
+.buyer-faq {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-8);
+}
+
+.buyer-faq-item {
+    padding: var(--space-5) var(--space-6);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-left: 3px solid var(--accent-500);
+    border-radius: var(--radius-lg);
+}
+
+.buyer-faq-item h3 {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: var(--space-2);
+    letter-spacing: -0.01em;
+}
+
+.buyer-faq-item p {
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+}
+
 @media (max-width: 760px) {
     .cta-steps {
         grid-template-columns: 1fr;
@@ -247,7 +284,18 @@ last_modified_at: 2026-08-28
             <span>Commercial offering</span>
         </div>
         <h1>Operate Sandboxes at Fleet Scale, on Your Infrastructure</h1>
-        <p class="subtitle">The open-source core confines a process. The commercial layer operates a fleet: the Sandbox HTTP API exposes sandboxes as remote infrastructure with identity and access control, and the Sandbox Scheduler fits a thousand agent sessions into the memory a reservation model spends on twenty. Both deploy into your cloud account or your data center, inside your trust boundary.</p>
+        <p class="subtitle">The open-source core confines one process. The commercial layer runs thousands: the Sandbox HTTP API gives sandboxes identity, lifetime, and access control over REST, and the Sandbox Scheduler fits a thousand agent sessions into the memory a reservation model spends on twenty. Both deploy inside your trust boundary, and nothing calls home.</p>
+
+        <div class="button-group">
+            <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+                <i data-lucide="calendar"></i>
+                Book a Technical Call
+            </a>
+            <a href="#terms" class="btn btn-secondary">
+                <i data-lucide="scale"></i>
+                What Is Free, What Is Licensed
+            </a>
+        </div>
     </div>
 </section>
 
@@ -296,7 +344,43 @@ last_modified_at: 2026-08-28
     </div>
 </section>
 
-<section class="section section-alt" id="http-api">
+<section class="section section-alt" id="fit">
+    <div class="section-container">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="users-round"></i>
+                <span>Who this is for</span>
+            </div>
+            <h2 class="section-title">Teams Running Sandboxes as a Fleet</h2>
+            <p class="section-subtitle">The commercial layer earns its place once sandboxes outnumber machines. If you run one sandbox on one host, stop here: the open-source project is the whole answer, and we would rather you used it.</p>
+        </div>
+
+        <div class="fit-grid">
+            <div class="fit">
+                <i data-lucide="bot"></i>
+                <h3>AI agent platforms</h3>
+                <p>You run a sandbox per session, sessions outlive a request, and the memory bill is dominated by sandboxes that are doing nothing.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="code-xml"></i>
+                <h3>Code execution products</h3>
+                <p>Notebook backends, interpreters, and evaluation harnesses that need an execution API with tenancy, quotas, and per-key accounting.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="server"></i>
+                <h3>Developer platforms</h3>
+                <p>Build and CI services where jobs come from outside your trust boundary and per-job VMs are the line item you are trying to remove.</p>
+            </div>
+            <div class="fit">
+                <i data-lucide="shield"></i>
+                <h3>Security engineering</h3>
+                <p>You are approving untrusted execution on shared infrastructure and need a boundary you can describe precisely to an auditor, with evidence rather than assertions to hand them.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="http-api">
     <div class="section-container">
         <div class="section-header">
             <div class="section-badge">
@@ -304,7 +388,7 @@ last_modified_at: 2026-08-28
                 <span>HTTP API</span>
             </div>
             <h2 class="section-title">A Sandbox Service Running on Your Own Servers</h2>
-            <p class="section-subtitle">The capabilities that matter the moment there is more than one machine, more than one tenant, or more than one caller.</p>
+            <p class="section-subtitle">The core is a function call. The API is the point where a sandbox becomes a resource: it has an ID, survives the request, can be reached by any language, and is guarded by keys with scopes. These are the capabilities that matter once there is more than one machine, one tenant, or one caller.</p>
         </div>
 
         <div class="cap-grid">
@@ -392,14 +476,14 @@ last_modified_at: 2026-08-28
                 <span>Deployment model</span>
             </div>
             <h2 class="section-title">Your Infrastructure, Not a Shared Cloud</h2>
-            <p class="section-subtitle">Licensed software, deployed into your cloud account or your data center. Your workloads never cross a vendor boundary, your security team keeps the keys, and no shared cloud sits between you and your customers.</p>
+            <p class="section-subtitle">Licensed software, not a hosted service. Your workloads never cross a vendor boundary, your security team keeps the keys, and no shared cloud sits between you and your customers.</p>
         </div>
 
         <div class="fit-grid">
             <div class="fit">
                 <i data-lucide="cloud"></i>
                 <h3>Your cloud account or your data center</h3>
-                <p>The API, the Scheduler, and every node run in your AWS, GCP, or Azure account, or on bare metal in your data center. Nothing needs KVM, so cloud VMs without nested virtualization are fine, and workloads, checkpoints, and credentials never leave your trust boundary.</p>
+                <p>The API, the Scheduler, and every node run in your AWS, GCP, or Azure account, or on bare metal. Nothing needs KVM, so ordinary cloud VMs without nested virtualization are fine. Workloads, checkpoints, and credentials never leave your trust boundary.</p>
             </div>
             <div class="fit">
                 <i data-lucide="shield-half"></i>
@@ -420,43 +504,27 @@ last_modified_at: 2026-08-28
     </div>
 </section>
 
-<section class="section">
-    <div class="section-container">
+<section class="section" id="questions">
+    <div class="section-container narrow">
         <div class="section-header">
             <div class="section-badge">
-                <i data-lucide="users-round"></i>
-                <span>Who this is for</span>
+                <i data-lucide="messages-square"></i>
+                <span>Before you book</span>
             </div>
-            <h2 class="section-title">Teams Running Sandboxes as a Fleet</h2>
-            <p class="section-subtitle">Built for teams whose sandbox count has outgrown one machine. For a single sandbox on a single host, the open-source project is the whole answer.</p>
+            <h2 class="section-title">The Questions Every Evaluation Raises</h2>
+            <p class="section-subtitle">Asked on nearly every first call. The answers are the same ones we give there.</p>
         </div>
 
-        <div class="fit-grid">
-            <div class="fit">
-                <i data-lucide="bot"></i>
-                <h3>AI agent platforms</h3>
-                <p>You run a sandbox per session, sessions outlive a request, and the memory bill is dominated by sandboxes that are doing nothing.</p>
+        <div class="buyer-faq">
+{% for item in page.faq %}            <div class="buyer-faq-item">
+                <h3>{{ item.q }}</h3>
+                <p>{{ item.a }}</p>
             </div>
-            <div class="fit">
-                <i data-lucide="code-xml"></i>
-                <h3>Code execution products</h3>
-                <p>Notebook backends, interpreters, and evaluation harnesses that need an execution API with tenancy, quotas, and per-key accounting.</p>
-            </div>
-            <div class="fit">
-                <i data-lucide="server"></i>
-                <h3>Developer platforms</h3>
-                <p>Build and CI services where jobs come from outside your trust boundary and per-job VMs are the line item you are trying to remove.</p>
-            </div>
-            <div class="fit">
-                <i data-lucide="shield"></i>
-                <h3>Security engineering</h3>
-                <p>You are approving untrusted execution on shared infrastructure and need a boundary you can describe precisely to an auditor, with evidence rather than assertions to hand them.</p>
-            </div>
-        </div>
+{% endfor %}        </div>
     </div>
 </section>
 
-<section class="section" id="terms">
+<section class="section section-alt" id="terms">
     <div class="section-container narrow">
         <div class="section-header">
             <div class="section-badge">
@@ -486,7 +554,7 @@ last_modified_at: 2026-08-28
         </div>
 
         <ul class="terms-list">
-            <li><strong>Deployment.</strong> Licensed software runs in your cloud account or data center. There is no hosted or shared-tenant offering.</li>
+            <li><strong>Deployment.</strong> Self-hosted only. There is no hosted or shared-tenant offering.</li>
             <li><strong>Trial.</strong> A pilot on your infrastructure against real traffic precedes any contract.</li>
             <li><strong>Support.</strong> Engineering support and a response SLA are part of every license.</li>
             <li><strong>Quote.</strong> Pricing depends on fleet size. Email <a href="mailto:contact@multikernel.io">contact@multikernel.io</a> with expected node count and peak concurrent sandboxes, or <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer">book a technical call</a>.</li>
