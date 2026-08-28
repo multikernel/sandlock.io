@@ -464,7 +464,7 @@
 }
 
 .docs-index-card p {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     color: var(--gray-600);
     line-height: var(--leading-relaxed);
     margin: 0;
