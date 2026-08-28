@@ -9,9 +9,7 @@ url: "https://sandlock.io"
 # Build settings
 markdown: kramdown
 encoding: utf-8
-permalink: /:year/:month/:day/:title/
 plugins:
-  - jekyll-feed
   - jekyll-sitemap
 
 github_pages:

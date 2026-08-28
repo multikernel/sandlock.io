@@ -1,8 +1,24 @@
 ---
 layout: default
-title: "FAQ"
+title: "Sandlock FAQ: Docker, seccomp, and Capabilities"
 description: "Answers to the questions people ask most about Sandlock: running inside Docker, the pidfd_getfd seccomp gate, CAP_SYS_PTRACE, and no-supervisor mode."
 permalink: /faq.html
+last_modified_at: 2026-08-14
+faq:
+  - q: "Sandlock is meant to replace the container. Isn't running it inside one redundant?"
+    a: "Often, yes. Sandlock needs no image, no runtime, no daemon, and no root, so starting a container just to run a sandbox pays twice. What people usually want from the container is the filesystem, and Sandlock provides that alone with --image, --chroot, or sandlock-oci. Nesting is worth it when a platform hands you a container anyway, or when you want a container boundary behind the Sandlock policy."
+  - q: "Can I run Sandlock in a stock Docker container, with no capabilities added and no seccomp changes?"
+    a: "No. Sandlock's supervisor duplicates the child's file descriptors with pidfd_getfd, and Docker's default seccomp profile only permits that syscall when the container holds CAP_SYS_PTRACE. A stock container needs either --cap-add SYS_PTRACE or a modified profile that allows pidfd_getfd explicitly."
+  - q: "Why does sandlock run fail on pidfd_getfd when sandlock check says the host is fine?"
+    a: "They report on different things. sandlock check inspects what the kernel supports: the Landlock ABI level, seccomp user notification, and the protections built on them. All of that is present inside the container, so the check passes. The failure comes from Docker's seccomp profile blocking pidfd_getfd, which is a container policy rather than a kernel capability."
+  - q: "What is the recommended way to run Sandlock from inside Docker?"
+    a: "Grant the container the capability the supervisor needs, and nothing more: docker run --cap-add SYS_PTRACE <image> sandlock run. No privileged container, no seccomp=unconfined, no custom profile to maintain. The capability is held by the container, not handed to the workload; what the workload may do is still decided by your Sandlock policy."
+  - q: "Adding SYS_PTRACE feels insecure. Can I take the privilege back?"
+    a: "Yes, on the Sandlock side. Deny the syscalls that capability unlocks to the sandboxed workload with --extra-deny-syscall. The supervisor runs outside the sandbox and keeps its own use of pidfd_getfd; only the child is affected."
+  - q: "Is there a way to avoid the capability entirely?"
+    a: "Yes, at a cost. --no-supervisor never calls pidfd_getfd, so it runs under Docker's default profile as is. You get Landlock plus a kernel-only deny filter and give up everything the supervisor provides: IP allowlisting, HTTP ACLs, resource limits, copy-on-write, chroot mediation, /proc virtualization, and custom handlers."
+  - q: "Does this apply to Podman and Kubernetes too?"
+    a: "Any runtime that applies a seccomp profile derived from Docker's inherits the same gate, so podman run --cap-add SYS_PTRACE is the equivalent fix. Kubernetes pods run seccomp-unconfined unless the pod selects RuntimeDefault; where that default is in force, add SYS_PTRACE in the container's security context."
 ---
 
 <style>

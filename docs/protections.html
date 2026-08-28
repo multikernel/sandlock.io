@@ -1,8 +1,9 @@
 ---
 layout: doc
 title: "Kernel Protections"
-description: "Sandlock enforces every Landlock protection the host supports and refuses to start when one is missing. How to relax that per protection for older kernels, and what each waiver costs."
+description: "Sandlock enforces every Landlock protection the host supports and refuses to start when one is missing. How to waive protections for older kernels, and the cost."
 permalink: /docs/protections.html
+last_modified_at: 2026-08-09
 short_title: "Kernel Protections"
 heading: "Kernel Protections"
 lede: "Sandlock refuses to start when a protection it expects is unavailable, which is the right default and the wrong one for a fleet with mixed kernels. Two builder methods relax it, one protection at a time, and never silently."
