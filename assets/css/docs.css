@@ -546,3 +546,5 @@
         text-align: left;
     }
 }
+
+.docs-meta { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--gray-500); }

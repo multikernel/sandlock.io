@@ -3,7 +3,8 @@ layout: default
 title: "Sandlock vs Containers, MicroVMs, and gVisor"
 description: "An honest comparison of Sandlock against containers, microVMs, gVisor, and bubblewrap, including the cases where Sandlock is the wrong tool."
 permalink: /comparison.html
-last_modified_at: 2026-08-09
+author: "Cong Wang"
+last_modified_at: 2026-08-28
 ---
 
 <style>
@@ -164,6 +165,7 @@ last_modified_at: 2026-08-09
         </div>
         <h1>Where Sandlock Fits</h1>
         <p class="subtitle">Sandlock is not a container runtime with a smaller footprint, and it is not a lightweight VM. It occupies a different point entirely: strict, kernel-enforced confinement of a process, with no image, no privilege, and no boot.</p>
+        <p class="page-meta">By {{ page.author }} &middot; Updated <time datetime="{{ page.last_modified_at | date: '%Y-%m-%d' }}">{{ page.last_modified_at | date: "%B %-d, %Y" }}</time></p>
     </div>
 </section>
 

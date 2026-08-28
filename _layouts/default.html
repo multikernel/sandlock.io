@@ -76,7 +76,15 @@
           "isAccessibleForFree": true,
           "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
           "downloadUrl": "https://github.com/multikernel/sandlock",
-          "author": { "@id": "https://multikernel.io/#organization" }
+          "author": { "@id": "https://multikernel.io/#organization" },
+          "citation": {
+            "@type": "ScholarlyArticle",
+            "name": "Sandlock: Confining AI Agent Code with Unprivileged Linux Primitives",
+            "author": [ { "@type": "Person", "name": "Cong Wang" }, { "@type": "Person", "name": "Yusheng Zheng" } ],
+            "datePublished": "2026-05",
+            "url": "https://arxiv.org/abs/2605.26298",
+            "sameAs": "https://doi.org/10.48550/arXiv.2605.26298"
+          }
         }{% endif %}{% if page.layout == "doc" %},
         {
           "@type": "TechArticle",
@@ -87,7 +95,8 @@
           "dateModified": "{{ page.last_modified_at | date_to_xmlschema }}",{% endif %}
           "author": { "@id": "https://multikernel.io/#organization" },
           "publisher": { "@id": "https://multikernel.io/#organization" },
-          "isPartOf": { "@id": "{{ site.url }}/#website" }
+          "isPartOf": { "@id": "{{ site.url }}/#website" }{% if page.author %},
+          "creator": {{ page.author | jsonify }}{% endif %}
         },
         {
           "@type": "BreadcrumbList",
@@ -315,6 +324,7 @@
                 <div class="footer-bottom-left">
                     <p>&copy; {{ site.time | date: '%Y' }} Multikernel Technologies, Inc. {{ t.footer.rights }}</p>
                     <p>{{ t.footer.license }}</p>
+                    {% if page.last_modified_at %}<p>Page updated {{ page.last_modified_at | date: "%B %-d, %Y" }}</p>{% endif %}
                 </div>
                 <div class="footer-bottom-right">
                     <div class="footer-social">

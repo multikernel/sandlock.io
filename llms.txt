@@ -1,0 +1,50 @@
+# Sandlock
+
+> Sandlock is a lightweight Linux process sandbox that confines untrusted code with Landlock, seccomp-bpf, and seccomp user notification. It applies a kernel-enforced policy to a process before it executes, with no root, no container image, no container runtime, and no hypervisor. Startup overhead is about 5 ms. Apache-2.0, written in Rust, maintained by Multikernel Technologies.
+
+Sandlock is built for code you did not write: AI agent tool calls, untrusted CI builds, per-request code execution, and function-as-a-service. Every path, network destination, and syscall is denied unless the policy allows it. Static rules are enforced by the kernel; a small userspace supervisor handles runtime decisions such as destination IP checks, HTTP method and path rules, credential injection, copy-on-write writes, and resource limits, all without cgroups or namespaces.
+
+Requirements: Linux 6.12 or later by default (older kernels can waive individual protections). Sandlock is a process sandbox, not a VM: it shares the host kernel and is not the right tool when a separate kernel is required.
+
+## Start here
+
+- [Getting Started](https://sandlock.io/docs/getting-started.html): install, check the kernel, run a first confined command
+- [How Sandlock Works](https://sandlock.io/how-it-works.html): Landlock, seccomp-bpf, seccomp notify, and the supervisor
+- [Security Model](https://sandlock.io/security.html): trust boundaries, guarantees per layer, what is out of scope
+- [Comparison](https://sandlock.io/comparison.html): Sandlock vs containers, microVMs, gVisor, bubblewrap, and when it is the wrong tool
+- [Use Cases](https://sandlock.io/use-cases.html): AI agents, CI, per-request execution, FaaS, Kubernetes
+- [FAQ](https://sandlock.io/faq.html): running inside Docker, the pidfd_getfd seccomp gate, CAP_SYS_PTRACE
+
+## Documentation
+
+- [Documentation home](https://sandlock.io/docs/)
+- [Architecture](https://sandlock.io/docs/architecture.html)
+- [Filesystem and Copy-on-Write](https://sandlock.io/docs/filesystem.html)
+- [Network Policy](https://sandlock.io/docs/network.html)
+- [HTTP ACL and Credential Injection](https://sandlock.io/docs/http-acl.html)
+- [Resource Limits](https://sandlock.io/docs/resources.html)
+- [Determinism](https://sandlock.io/docs/determinism.html)
+- [Kernel Protections](https://sandlock.io/docs/protections.html)
+- [Dynamic Policy](https://sandlock.io/docs/policy.html)
+- [Extension Handlers](https://sandlock.io/docs/handlers.html)
+- [Profiles and sandlock learn](https://sandlock.io/docs/profiles.html)
+- [CLI Reference](https://sandlock.io/docs/cli.html)
+- [Python SDK](https://sandlock.io/docs/python.html)
+- [Rust API](https://sandlock.io/docs/rust.html)
+- [Go SDK](https://sandlock.io/docs/go.html)
+- [OCI Runtime and Kubernetes](https://sandlock.io/docs/oci.html)
+- [MCP Server](https://sandlock.io/docs/mcp.html)
+- [Sandbox Reference](https://sandlock.io/docs/reference.html): every policy field, type, and default
+
+## Commercial
+
+- [Enterprise](https://sandlock.io/enterprise.html): Sandbox HTTP API and Sandbox Scheduler, licensed and deployed in your own cloud account or data center
+- [Pricing](https://sandlock.io/pricing.md): what is free, what is licensed, how to get a quote
+
+## Research and source
+
+- [Paper: Sandlock: Confining AI Agent Code with Unprivileged Linux Primitives](https://arxiv.org/abs/2605.26298), Cong Wang and Yusheng Zheng, arXiv 2605.26298, May 2026
+- [Source code on GitHub](https://github.com/multikernel/sandlock)
+- [Python package on PyPI](https://pypi.org/project/sandlock/)
+- [Engineering blog](https://multikernel.io/blog/)
+- Contact: contact@multikernel.io

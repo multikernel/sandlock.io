@@ -48,6 +48,7 @@ layout: default
         <header class="docs-header">
             <h1>{{ page.heading }}</h1>
             {% if page.lede %}<p class="docs-lede">{{ page.lede }}</p>{% endif %}
+            {% if page.last_modified_at %}<p class="docs-meta">Updated <time datetime="{{ page.last_modified_at | date: '%Y-%m-%d' }}">{{ page.last_modified_at | date: "%B %-d, %Y" }}</time></p>{% endif %}
         </header>
 
         <div class="prose">

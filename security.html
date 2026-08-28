@@ -3,7 +3,8 @@ layout: default
 title: "Security Model and Threat Model"
 description: "Sandlock's threat model: trust boundaries, what each enforcement layer guarantees, how TOCTOU is handled, default-deny posture, and the limits of the sandbox."
 permalink: /security.html
-last_modified_at: 2026-08-09
+author: "Cong Wang"
+last_modified_at: 2026-08-28
 ---
 
 <style>
@@ -189,6 +190,7 @@ last_modified_at: 2026-08-09
         </div>
         <h1>What Sandlock Guarantees, and What It Does Not</h1>
         <p class="subtitle">A sandbox is only useful if you know its edges. This page states the trust boundaries, the guarantees each layer provides, and the attacks that are explicitly out of scope.</p>
+        <p class="page-meta">By {{ page.author }} &middot; Updated <time datetime="{{ page.last_modified_at | date: '%Y-%m-%d' }}">{{ page.last_modified_at | date: "%B %-d, %Y" }}</time></p>
     </div>
 </section>
 
@@ -362,6 +364,43 @@ last_modified_at: 2026-08-09
             </ul>
 
             <p>Sandlock ships no secret-manager client, deliberately. An external fetcher materializes the value into a <code class="inline">file:</code> or <code class="inline">fd:</code> source, keeping it off <code class="inline">ps</code>, out of shell history, and out of the child's environment, and letting you use Vault, a cloud secret store, or a CSI driver without Sandlock having an opinion.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt" id="research">
+    <div class="section-container narrow">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="book-open"></i>
+                <span>Research</span>
+            </div>
+            <h2 class="section-title">Where This Threat Model Is Written Down</h2>
+            <p class="section-subtitle">The guarantees above are stated formally, and the attacks that are out of scope enumerated, in the Sandlock paper.</p>
+        </div>
+
+        <div class="research-list">
+            <article class="research-item">
+                <div class="research-kind">Paper</div>
+                <h3><a href="https://arxiv.org/abs/2605.26298">Sandlock: Confining AI Agent Code with Unprivileged Linux Primitives</a></h3>
+                <p class="research-meta">Cong Wang and Yusheng Zheng. arXiv:2605.26298, May 2026.</p>
+                <blockquote>&ldquo;It also supports dynamic network decisions, HTTP-level access control, TOCTOU-safe inspection of execve arguments, and reversible filesystem effects. On our workstation, Sandlock adds roughly 5 ms of startup overhead and runs Redis at bare-metal throughput (within measurement noise).&rdquo;</blockquote>
+            </article>
+            <article class="research-item">
+                <div class="research-kind">Engineering post</div>
+                <h3><a href="https://multikernel.io/2026/03/14/introducing-sandlock/">Processes Are All You Need for AI Sandboxing</a></h3>
+                <p class="research-meta">Multikernel Technologies, March 2026. Why a process, not a container or a VM, is the right unit of confinement for agent tool calls.</p>
+            </article>
+            <article class="research-item">
+                <div class="research-kind">Engineering post</div>
+                <h3><a href="https://multikernel.io/2026/03/19/sandlock-cow-fork/">1,000 Sandboxes in 718 Milliseconds: Copy-on-Write Forking for AI Agents</a></h3>
+                <p class="research-meta">Multikernel Technologies, March 2026. How COW fork clones a running sandbox in about 530 &micro;s.</p>
+            </article>
+            <article class="research-item">
+                <div class="research-kind">Engineering post</div>
+                <h3><a href="https://multikernel.io/2026/04/03/ai-agent-sandboxes-got-security-wrong/">AI Agent Sandboxes Got Security Wrong</a></h3>
+                <p class="research-meta">Multikernel Technologies, April 2026. The case for allowlists over isolation boundaries.</p>
+            </article>
         </div>
     </div>
 </section>

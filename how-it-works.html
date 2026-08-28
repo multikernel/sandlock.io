@@ -3,7 +3,8 @@ layout: default
 title: "How Sandlock Works"
 description: "How Sandlock combines Landlock, seccomp-bpf, and seccomp user notification into one policy applied before a process executes: enforcement paths and kernel needs."
 permalink: /how-it-works.html
-last_modified_at: 2026-08-10
+author: "Cong Wang"
+last_modified_at: 2026-08-28
 ---
 
 <style>
@@ -372,6 +373,7 @@ last_modified_at: 2026-08-10
         </div>
         <h1>How Sandlock Works</h1>
         <p class="subtitle">Sandlock is not a runtime the workload runs inside. It is a policy the kernel applies to a process, installed after <code class="inline" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8)">fork()</code> and before <code class="inline" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8)">exec()</code>, so the workload has never executed a single unconfined instruction.</p>
+        <p class="page-meta">By {{ page.author }} &middot; Updated <time datetime="{{ page.last_modified_at | date: '%Y-%m-%d' }}">{{ page.last_modified_at | date: "%B %-d, %Y" }}</time></p>
     </div>
 </section>
 
@@ -615,6 +617,43 @@ last_modified_at: 2026-08-10
                     <tr><th scope="row">Go SDK</th><td>cgo bindings over the FFI library</td></tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt" id="research">
+    <div class="section-container narrow">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="book-open"></i>
+                <span>Research</span>
+            </div>
+            <h2 class="section-title">The Paper Behind the Design</h2>
+            <p class="section-subtitle">The architecture on this page is described in full, with measurements, in the Sandlock paper and a series of engineering posts.</p>
+        </div>
+
+        <div class="research-list">
+            <article class="research-item">
+                <div class="research-kind">Paper</div>
+                <h3><a href="https://arxiv.org/abs/2605.26298">Sandlock: Confining AI Agent Code with Unprivileged Linux Primitives</a></h3>
+                <p class="research-meta">Cong Wang and Yusheng Zheng. arXiv:2605.26298, May 2026.</p>
+                <blockquote>&ldquo;Sandlock is a lightweight Linux process sandbox organized around a simple split: static, input-independent policy is compiled into kernel-enforced rules, while a narrow supervisor handles runtime-dependent decisions and virtualized effects. This split lets Sandlock enforce filesystem, network, IPC, and syscall policies without root, cgroups, images, or mandatory namespaces.&rdquo;</blockquote>
+            </article>
+            <article class="research-item">
+                <div class="research-kind">Engineering post</div>
+                <h3><a href="https://multikernel.io/2026/03/14/introducing-sandlock/">Processes Are All You Need for AI Sandboxing</a></h3>
+                <p class="research-meta">Multikernel Technologies, March 2026. Why a process, not a container or a VM, is the right unit of confinement for agent tool calls.</p>
+            </article>
+            <article class="research-item">
+                <div class="research-kind">Engineering post</div>
+                <h3><a href="https://multikernel.io/2026/03/19/sandlock-cow-fork/">1,000 Sandboxes in 718 Milliseconds: Copy-on-Write Forking for AI Agents</a></h3>
+                <p class="research-meta">Multikernel Technologies, March 2026. How COW fork clones a running sandbox in about 530 &micro;s.</p>
+            </article>
+            <article class="research-item">
+                <div class="research-kind">Engineering post</div>
+                <h3><a href="https://multikernel.io/2026/04/03/ai-agent-sandboxes-got-security-wrong/">AI Agent Sandboxes Got Security Wrong</a></h3>
+                <p class="research-meta">Multikernel Technologies, April 2026. The case for allowlists over isolation boundaries.</p>
+            </article>
         </div>
     </div>
 </section>

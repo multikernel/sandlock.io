@@ -3,7 +3,7 @@ layout: default
 title: "Sandbox HTTP API and Scheduler for Fleets"
 description: "The Sandlock core is open source. On top of it we license the Sandbox HTTP API and Sandbox Scheduler, deployed into your own cloud account or data center."
 permalink: /enterprise.html
-last_modified_at: 2026-08-11
+last_modified_at: 2026-08-28
 ---
 
 <style>
@@ -453,6 +453,44 @@ last_modified_at: 2026-08-11
                 <p>You are approving untrusted execution on shared infrastructure and need a boundary you can describe precisely to an auditor, with evidence rather than assertions to hand them.</p>
             </div>
         </div>
+    </div>
+</section>
+
+<section class="section" id="terms">
+    <div class="section-container narrow">
+        <div class="section-header">
+            <div class="section-badge">
+                <i data-lucide="scale"></i>
+                <span>Commercial terms</span>
+            </div>
+            <h2 class="section-title">What Is Free, What Is Licensed, and How It Is Priced</h2>
+            <p class="section-subtitle">The short version, in plain text, for anyone evaluating Sandlock on a deadline. A machine-readable copy is at <a href="/pricing.md">/pricing.md</a>.</p>
+        </div>
+
+        <div class="data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Component</th>
+                        <th scope="col">License</th>
+                        <th scope="col">Price</th>
+                        <th scope="col">Limits</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><th scope="row">Sandlock core, CLI, Python, Rust, and Go SDKs, OCI runtime, MCP server</th><td>Apache-2.0</td><td>Free</td><td>None. No seat, node, or usage cap; no telemetry; no registration.</td></tr>
+                    <tr><th scope="row">Sandbox HTTP API</th><td>Commercial, deployed in your account</td><td>Annual license, sized to the fleet</td><td>Per deployment; unlimited sandboxes and API keys within it.</td></tr>
+                    <tr><th scope="row">Sandbox Scheduler</th><td>Commercial, deployed in your account</td><td>Annual license, sized to the fleet</td><td>Per deployment; priced by node count.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <ul class="terms-list">
+            <li><strong>Deployment.</strong> Licensed software runs in your cloud account or data center. There is no hosted or shared-tenant offering.</li>
+            <li><strong>Trial.</strong> A pilot on your infrastructure against real traffic precedes any contract.</li>
+            <li><strong>Support.</strong> Engineering support and a response SLA are part of every license.</li>
+            <li><strong>Quote.</strong> Pricing depends on fleet size. Email <a href="mailto:contact@multikernel.io">contact@multikernel.io</a> with expected node count and peak concurrent sandboxes, or <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer">book a technical call</a>.</li>
+        </ul>
     </div>
 </section>
 
