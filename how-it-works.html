@@ -372,7 +372,7 @@ last_modified_at: 2026-08-28
             <span>Architecture</span>
         </div>
         <h1>How Sandlock Works</h1>
-        <p class="subtitle">Sandlock is not a runtime the workload runs inside. It is a policy the kernel applies to a process, installed after <code class="inline" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8)">fork()</code> and before <code class="inline" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8)">exec()</code>, so the workload has never executed a single unconfined instruction.</p>
+        <p class="subtitle">Not a runtime the workload runs inside: a policy the kernel applies to a process between <code class="inline" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8)">fork()</code> and <code class="inline" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8)">exec()</code>, so it never executes an unconfined instruction.</p>
         <p class="page-meta">By {{ page.author }} &middot; Updated <time datetime="{{ page.last_modified_at | date: '%Y-%m-%d' }}">{{ page.last_modified_at | date: "%B %-d, %Y" }}</time></p>
     </div>
 </section>
@@ -385,7 +385,7 @@ last_modified_at: 2026-08-28
                 <span>Three mechanisms</span>
             </div>
             <h2 class="section-title">What Enforces What</h2>
-            <p class="section-subtitle">Sandlock pushes as much of the policy as possible into the kernel. Only the rules the kernel cannot express, such as "this destination IP" or "this HTTP path", reach the supervisor.</p>
+            <p class="section-subtitle">As much policy as possible goes into the kernel. Only rules it cannot express, such as a destination IP or an HTTP path, reach the supervisor.</p>
         </div>
 
         <div class="layer-stack">
@@ -396,13 +396,12 @@ last_modified_at: 2026-08-28
                     <span class="enforced"><i data-lucide="shield" style="width:11px;height:11px"></i> Kernel</span>
                 </div>
                 <div class="layer-body">
-                    <p>Landlock is Linux's unprivileged access-control LSM. Sandlock translates the policy's filesystem, network, and IPC rules into a Landlock ruleset and applies it to the child process. From that point the kernel evaluates every access against the ruleset, and the ruleset can never be relaxed for the lifetime of the process tree.</p>
+                    <p>Linux's unprivileged access-control LSM. The policy's filesystem, network, and IPC rules become a Landlock ruleset applied to the child; the kernel evaluates every access against it, and it can never be relaxed for the life of the process tree. It costs nothing per syscall beyond the kernel's own check.</p>
                     <ul>
-                        <li><strong>Filesystem.</strong> Read and write grants are recursive <code class="inline">PATH_BENEATH</code> rules. Because the kernel resolves the path itself at access time, these rules are immune to time-of-check/time-of-use attacks that defeat path-string filtering in userspace.</li>
-                        <li><strong>TCP.</strong> Connect and bind port allowlists (Landlock ABI v4 and later).</li>
-                        <li><strong>IPC.</strong> Abstract UNIX socket scoping and signal scoping (ABI v6), which keep a sandbox from reaching sibling processes on the host.</li>
+                        <li><strong>Filesystem.</strong> Recursive <code class="inline">PATH_BENEATH</code> rules, resolved by the kernel at access time, so immune to TOCTOU races.</li>
+                        <li><strong>TCP.</strong> Connect and bind port allowlists (ABI v4).</li>
+                        <li><strong>IPC.</strong> Abstract UNIX socket and signal scoping (ABI v6).</li>
                     </ul>
-                    <p>Landlock costs nothing per syscall beyond the kernel's own check. This is why confinement is cheap enough to leave on for production workloads.</p>
                 </div>
             </div>
 
@@ -413,9 +412,8 @@ last_modified_at: 2026-08-28
                     <span class="enforced"><i data-lucide="shield" style="width:11px;height:11px"></i> Kernel</span>
                 </div>
                 <div class="layer-body">
-                    <p>A seccomp-bpf filter removes syscall families a confined workload has no legitimate use for, before any of them can reach the kernel's implementation. Sandlock always applies its default blocklist; a policy can add more denials on top of it, and can re-enable specific named groups such as System V IPC when a workload genuinely needs them.</p>
-                    <p>The same filter installs the notification listener used by layer 3. Because the filter is installed alongside <code class="inline">NO_NEW_PRIVS</code>, the child cannot regain privileges through a setuid binary, and the filter is inherited by every descendant.</p>
-                    <p>A <strong>no-supervisor mode</strong> uses only layers 1 and 2: Landlock plus a kernel-only deny filter, with no supervisor process at all. It is the mode used when nesting one sandlock inside another, since the kernel permits only one notification listener per task.</p>
+                    <p>A filter removes syscall families a confined workload has no legitimate use for. The default blocklist is always applied; a policy can add denials or re-enable named groups such as System V IPC. Installed with <code class="inline">NO_NEW_PRIVS</code> and inherited by every descendant, the same filter also carries the notification listener for layer 3.</p>
+                    <p>A <strong>no-supervisor mode</strong> uses layers 1 and 2 alone, which is how one sandlock nests inside another.</p>
                 </div>
             </div>
 
@@ -426,8 +424,7 @@ last_modified_at: 2026-08-28
                     <span class="enforced userspace"><i data-lucide="eye" style="width:11px;height:11px"></i> Supervisor</span>
                 </div>
                 <div class="layer-body">
-                    <p>Some policy cannot be expressed as a static kernel rule. "Connect only to this IP", "stop at 512 MB of resident memory", "stage this write instead of performing it" all require a decision at the moment the syscall happens. Seccomp user notification hands those syscalls to an async supervisor running in the parent process.</p>
-                    <p>The supervisor is the one component that is not the kernel, so Sandlock keeps its responsibilities narrow and its ordering fixed: built-in handlers run first, and any handlers a downstream crate registers run after them, which means a custom handler can extend confinement but never subvert it.</p>
+                    <p>"Connect only to this IP", "stop at 512 MB", "stage this write" all need a decision at the moment the syscall happens. Seccomp user notification hands those syscalls to an async supervisor in the parent. Its responsibilities are narrow and its ordering fixed: built-in handlers run first, custom ones after, so a handler can extend confinement but never subvert it.</p>
                 </div>
             </div>
         </div>
@@ -442,7 +439,7 @@ last_modified_at: 2026-08-28
                 <span>Startup</span>
             </div>
             <h2 class="section-title">The Confinement Sequence</h2>
-            <p class="section-subtitle">Order matters. Every restriction is in place before the workload's first instruction runs, and the parent only starts supervising after the child has confirmed the filter is installed.</p>
+            <p class="section-subtitle">Every restriction is in place before the workload's first instruction, and the parent supervises only after the child confirms the filter is installed.</p>
         </div>
 
         <div class="flow">
@@ -476,7 +473,7 @@ last_modified_at: 2026-08-28
         <div class="callout">
             <i data-lucide="info"></i>
             <div class="callout-body">
-                <p><strong>Why fds are closed at step 7.</strong> A descriptor inherited from the parent is a capability the Landlock ruleset never sees: it was opened before confinement, so the kernel will honour it. Closing everything above stderr removes that escape hatch before <code class="inline">exec</code>.</p>
+                <p><strong>Why fds are closed at step 7.</strong> A descriptor inherited from the parent was opened before confinement, so the kernel honours it. Closing everything above stderr removes that escape hatch.</p>
             </div>
         </div>
     </div>
@@ -490,7 +487,7 @@ last_modified_at: 2026-08-28
                 <span>The supervisor</span>
             </div>
             <h2 class="section-title">Which Syscalls Take a Round Trip</h2>
-            <p class="section-subtitle">Only the syscalls in this table are intercepted, and only when the corresponding policy feature is active. Everything else runs at full speed under the kernel filter.</p>
+            <p class="section-subtitle">Only these syscalls are intercepted, and only when the matching policy feature is active. Everything else runs at full speed.</p>
         </div>
 
         <div class="data-table-wrap">
@@ -527,14 +524,14 @@ last_modified_at: 2026-08-28
                 <span>Network enforcement</span>
             </div>
             <h2 class="section-title">Two Paths, Chosen by Your Policy</h2>
-            <p class="section-subtitle">Sandlock picks the cheapest enforcement path that can express the rules you wrote. You do not configure this; it falls out of the policy.</p>
+            <p class="section-subtitle">Sandlock picks the cheapest path that can express your rules. Nothing to configure; it falls out of the policy.</p>
         </div>
 
         <div class="path-grid">
             <div class="capability-card primary">
                 <div class="capability-icon"><i data-lucide="zap"></i></div>
                 <h3 class="capability-title">Direct path</h3>
-                <p class="capability-description">Selected when the policy is pure TCP port rules with no concrete host, IP, or CIDR, and no HTTP ACL. Landlock enforces the port allowlist in the kernel, and there is no per-syscall overhead at all.</p>
+                <p class="capability-description">For pure TCP port rules with no host, IP, CIDR, or HTTP ACL. Landlock enforces the allowlist in the kernel; no per-syscall overhead.</p>
                 <div class="capability-features">
                     <div class="feature-item"><i data-lucide="check"></i><span>Zero userspace round trips</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span>Example: <code class="inline">--net-allow :443</code></span></div>
@@ -544,7 +541,7 @@ last_modified_at: 2026-08-28
             <div class="capability-card">
                 <div class="capability-icon"><i data-lucide="route"></i></div>
                 <h3 class="capability-title">On-behalf path</h3>
-                <p class="capability-description">Selected for any host, IP, or CIDR target, any UDP or ICMP rule, or any HTTP ACL rule, because the destination address has to be inspected and Landlock cannot do that. The supervisor duplicates the child's socket, learns its protocol via <code class="inline">SO_PROTOCOL</code>, checks the destination, and performs the syscall itself.</p>
+                <p class="capability-description">For any host, IP, CIDR, UDP, ICMP, or HTTP rule, since the destination must be inspected. The supervisor duplicates the child's socket, checks the destination, and performs the syscall itself.</p>
                 <div class="capability-features">
                     <div class="feature-item"><i data-lucide="check"></i><span>Per-connection check, not per-packet</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span>Example: <code class="inline">--net-allow api.example.com:443</code></span></div>
@@ -569,7 +566,7 @@ last_modified_at: 2026-08-28
                 <span>Components</span>
             </div>
             <h2 class="section-title">One Core, Many Front Ends</h2>
-            <p class="section-subtitle">Sandlock is written in Rust. Every interface, including the SDKs in other languages, drives the same core through the same policy object.</p>
+            <p class="section-subtitle">One Rust core. Every interface drives it through the same policy object.</p>
         </div>
 
         <div class="stack">
@@ -597,7 +594,7 @@ last_modified_at: 2026-08-28
                 </div>
             </div>
 
-            <p class="stack-note">The CLI and both SDKs reach the core through the C ABI. <strong>sandlock-oci links the core directly</strong>, since it is a Rust crate itself and has no reason to cross the boundary.</p>
+            <p class="stack-note">The CLI and SDKs go through the C ABI. <strong>sandlock-oci links the core directly</strong>, being a Rust crate itself.</p>
         </div>
 
         <div class="data-table-wrap" style="margin-top: var(--space-8);">
@@ -629,7 +626,7 @@ last_modified_at: 2026-08-28
                 <span>Research</span>
             </div>
             <h2 class="section-title">The Paper Behind the Design</h2>
-            <p class="section-subtitle">The architecture on this page is described in full, with measurements, in the Sandlock paper and a series of engineering posts.</p>
+            <p class="section-subtitle">This architecture is described in full, with measurements, in the paper and the engineering posts.</p>
         </div>
 
         <div class="research-list">
@@ -666,7 +663,7 @@ last_modified_at: 2026-08-28
                 <span>Requirements</span>
             </div>
             <h2 class="section-title">What the Host Kernel Must Provide</h2>
-            <p class="section-subtitle">Sandlock targets Linux 6.12 and later, which is where Landlock ABI v6 lands. Individual protections can be degraded or disabled per policy when you deploy across a mixed fleet.</p>
+            <p class="section-subtitle">Linux 6.12 or later, where Landlock ABI v6 lands. Individual protections can be waived per policy for a mixed fleet.</p>
         </div>
 
         <div class="data-table-wrap">
@@ -685,14 +682,14 @@ last_modified_at: 2026-08-28
                 </tbody>
             </table>
         </div>
-        <p class="table-note" style="color: rgba(255,255,255,0.45);">Run <code style="color:var(--accent-400)">sandlock check</code> to report the running kernel's Landlock ABI and which protections are available. Building Sandlock itself needs Rust 1.70 or later; the Python SDK needs Python 3.8 or later.</p>
+        <p class="table-note" style="color: rgba(255,255,255,0.45);"><code style="color:var(--accent-400)">sandlock check</code> reports the kernel's Landlock ABI and available protections. Building needs Rust 1.70; the Python SDK needs Python 3.8.</p>
     </div>
 </section>
 
 <section class="cta-band">
     <div class="cta-band-inner">
         <h2>Read the Documentation</h2>
-        <p>Every policy field, every flag, and every enforcement rule is documented, from a five-minute quickstart to the complete sandbox reference.</p>
+        <p>Every field, flag, and enforcement rule, from a five-minute quickstart to the full reference.</p>
         <div class="button-group">
             <a href="/docs/" class="btn btn-primary">
                 <i data-lucide="book-open"></i>
