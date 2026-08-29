@@ -110,7 +110,7 @@ last_modified_at: 2026-08-09
         </div>
 
         <h1>Run Untrusted Code Without Handing It Your Machine</h1>
-        <p class="subtitle">Sandlock is a lightweight Linux process sandbox. It confines a command's filesystem, network, syscalls, and resources with kernel-enforced policy, in about 5 milliseconds. No root. No image build. No container runtime. No hypervisor.</p>
+        <p class="subtitle">Sandlock is a lightweight Linux process sandbox. Kernel-enforced policy over filesystem, network, syscalls, and resources, applied in about 5 milliseconds. No root, no image, no container runtime, no hypervisor.</p>
 
         <div class="button-group">
             <a href="/docs/getting-started.html" class="btn btn-primary">
@@ -160,28 +160,6 @@ last_modified_at: 2026-08-09
 
         <div class="hero-trust">
             <p class="trust-text">Open source, Apache-2.0, written in Rust</p>
-            <div class="trust-features">
-                <div class="trust-feature">
-                    <i data-lucide="lock"></i>
-                    <span>Kernel-enforced policy</span>
-                </div>
-                <div class="trust-feature">
-                    <i data-lucide="layers"></i>
-                    <span>No namespaces or cgroups</span>
-                </div>
-                <div class="trust-feature">
-                    <i data-lucide="terminal"></i>
-                    <span>CLI, Python, Rust, Go</span>
-                </div>
-                <div class="trust-feature">
-                    <i data-lucide="container"></i>
-                    <span>OCI runtime for Kubernetes</span>
-                </div>
-                <div class="trust-feature">
-                    <i data-lucide="blocks"></i>
-                    <span>Programmable interception</span>
-                </div>
-            </div>
         </div>
     </div>
 </section>
@@ -195,14 +173,14 @@ last_modified_at: 2026-08-09
                 <span>The gap</span>
             </div>
             <h2 class="section-title">Strict Confinement Without the Weight</h2>
-            <p class="section-subtitle">Containers and microVMs are powerful, but both were designed to package and boot a system. When all you need is to run one command you do not trust, they make you pay for a system anyway.</p>
+            <p class="section-subtitle">Containers and microVMs package and boot a system. To run one command you do not trust, they make you pay for a system anyway.</p>
         </div>
 
         <div class="cards-grid">
             <div class="capability-card">
                 <div class="capability-icon"><i data-lucide="box"></i></div>
                 <h3 class="capability-title">Containers</h3>
-                <p class="capability-description">Require an image build, a runtime daemon, and root or a configured user-namespace setup. Every container shares the host kernel, and the isolation boundary is a namespace, not a policy the kernel evaluates per access.</p>
+                <p class="capability-description">An image, a daemon, and root or user namespaces, for a boundary that is a namespace rather than a policy.</p>
                 <div class="capability-features">
                     <div class="feature-item"><i data-lucide="minus"></i><span>~200 ms to start</span></div>
                     <div class="feature-item"><i data-lucide="minus"></i><span>Image build in the loop</span></div>
@@ -213,7 +191,7 @@ last_modified_at: 2026-08-09
             <div class="capability-card">
                 <div class="capability-icon"><i data-lucide="server"></i></div>
                 <h3 class="capability-title">MicroVMs</h3>
-                <p class="capability-description">A separate guest kernel gives a strong boundary, but it needs KVM, a guest image, and a device model. Nested virtualization inside a cloud VM adds real overhead, and there is no visibility into what the guest is doing at the syscall level.</p>
+                <p class="capability-description">A separate kernel is a strong boundary, but it needs KVM, a guest image, and gives no view of what runs inside.</p>
                 <div class="capability-features">
                     <div class="feature-item"><i data-lucide="minus"></i><span>Requires KVM access</span></div>
                     <div class="feature-item"><i data-lucide="minus"></i><span>Guest image to maintain</span></div>
@@ -224,7 +202,7 @@ last_modified_at: 2026-08-09
             <div class="capability-card primary">
                 <div class="capability-icon"><i data-lucide="shield-check"></i></div>
                 <h3 class="capability-title">Sandlock</h3>
-                <p class="capability-description">A policy applied to a process. Landlock and seccomp-bpf enforce filesystem, network, IPC, and syscall rules in the kernel; a userspace supervisor adds resource limits, destination IP checks, HTTP method and path rules, and copy-on-write writes.</p>
+                <p class="capability-description">A policy applied to a process: the kernel enforces the rules, a small supervisor handles the rest.</p>
                 <div class="capability-features">
                     <div class="feature-item"><i data-lucide="check"></i><span>~5 ms to start, no image</span></div>
                     <div class="feature-item"><i data-lucide="check"></i><span>Runs as an ordinary user</span></div>
@@ -244,44 +222,44 @@ last_modified_at: 2026-08-09
                 <span>Capabilities</span>
             </div>
             <h2 class="section-title">One Policy, Six Enforcement Surfaces</h2>
-            <p class="section-subtitle">Every dimension of the sandbox is described in the same policy object, whether you write it as CLI flags, a TOML profile, or a struct in Python, Rust, or Go.</p>
+            <p class="section-subtitle">One policy object, whether written as CLI flags, a TOML profile, or a struct in Python, Rust, or Go.</p>
         </div>
 
         <div class="features-grid">
             <div class="feature-card">
                 <div class="feature-icon"><i data-lucide="folder-lock"></i></div>
                 <h3 class="feature-title">Filesystem</h3>
-                <p class="feature-description">Landlock grants read and write paths as recursive rules the kernel evaluates on every access, so the policy is immune to time-of-check/time-of-use races. Denied paths override broader grants.</p>
+                <p class="feature-description">Landlock read and write grants, evaluated by the kernel on every access, immune to TOCTOU races.</p>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon"><i data-lucide="network"></i></div>
                 <h3 class="feature-title">Network</h3>
-                <p class="feature-description">Default-deny egress. Allow a hostname, an IP, or a CIDR on specific ports over TCP, UDP, or ICMP, or invert it with a denylist. Bind ports are governed separately, and can be virtualized per sandbox.</p>
+                <p class="feature-description">Default-deny egress. Allow a host, IP, or CIDR on specific ports over TCP, UDP, or ICMP.</p>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon"><i data-lucide="globe-lock"></i></div>
                 <h3 class="feature-title">HTTP ACL</h3>
-                <p class="feature-description">Go past <code class="inline">host:443</code>: allow <code class="inline">POST api.openai.com/v1/chat/completions</code> and nothing else. Zero-config HTTPS interception generates an ephemeral CA and splices it into the trust bundles you name.</p>
+                <p class="feature-description">Allow <code class="inline">POST api.openai.com/v1/chat/completions</code> and nothing else, with zero-config HTTPS interception.</p>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon"><i data-lucide="key-round"></i></div>
                 <h3 class="feature-title">Credential injection</h3>
-                <p class="feature-description">The API key lives in the supervisor and is attached to the request in the proxy, strictly after the ACL check. The sandboxed process never holds the secret and cannot exfiltrate it.</p>
+                <p class="feature-description">The key is attached in the proxy after the ACL check. The sandboxed process never holds it.</p>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon"><i data-lucide="copy"></i></div>
                 <h3 class="feature-title">Copy-on-write</h3>
-                <p class="feature-description">Writes under the working directory are staged in an upper layer and committed on success or discarded on failure. <code class="inline">--dry-run</code> shows exactly which files a command would add, modify, or delete.</p>
+                <p class="feature-description">Writes are staged, then committed or discarded. <code class="inline">--dry-run</code> shows what a command would change.</p>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon"><i data-lucide="gauge"></i></div>
                 <h3 class="feature-title">Resources</h3>
-                <p class="feature-description">Memory, process count, open files, CPU percentage, disk quota, CPU pinning, and GPU device selection, all without cgroups. A given GPU index is a hard Landlock boundary, not an environment variable.</p>
+                <p class="feature-description">Memory, processes, open files, CPU, disk, and GPU device selection, without cgroups.</p>
             </div>
         </div>
     </div>
@@ -296,21 +274,21 @@ last_modified_at: 2026-08-09
                 <span>How it works</span>
             </div>
             <h2 class="section-title">Kernel First, Supervisor Second</h2>
-            <p class="section-subtitle">Sandlock forks, installs confinement in the child before it executes anything, and only then lets the workload start. What the kernel can enforce, the kernel enforces.</p>
+            <p class="section-subtitle">Confinement is installed in the child before it executes anything. What the kernel can enforce, the kernel enforces.</p>
         </div>
 
         <div class="pillars">
             <div class="pillar">
                 <h3>Landlock</h3>
-                <p>Unprivileged, kernel-evaluated access control for filesystem paths, TCP connect and bind ports, and IPC scoping. Applied once and irreversible for the lifetime of the process tree.</p>
+                <p>Kernel-evaluated access control for paths, TCP ports, and IPC, irreversible for the life of the process tree.</p>
             </div>
             <div class="pillar">
                 <h3>seccomp-bpf</h3>
-                <p>A default blocklist removes syscall families a confined workload has no business using. Extra denials compose on top; the blocklist itself is always applied.</p>
+                <p>A default blocklist removes syscall families a confined workload has no business using.</p>
             </div>
             <div class="pillar">
                 <h3>seccomp notify</h3>
-                <p>The supervisor sees selected syscalls before they run: destination IP checks, memory and process accounting, COW interception, /proc virtualization, and port remapping.</p>
+                <p>The supervisor sees selected syscalls first: IP checks, memory accounting, COW, /proc virtualization.</p>
             </div>
         </div>
 
@@ -333,14 +311,12 @@ last_modified_at: 2026-08-09
                     <span>Programmable</span>
                 </div>
                 <h2 class="section-title">A Sandbox You Can Program, Not Just Configure</h2>
-                <p class="section-subtitle">Every policy on this page is declarative. Handlers are the layer underneath: your own code runs inside the supervisor, registered on any syscall you choose, and decides what the workload actually observes.</p>
+                <p class="section-subtitle">Handlers run your code inside the supervisor, on any syscall you choose, and decide what the workload observes.</p>
 
                 <div class="capability-features" style="margin-top: var(--space-6);">
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>Deny, or fabricate a result.</strong> Return an errno, or a value the syscall never produced.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Serve files that do not exist.</strong> Hand the guest a sealed in-memory file: a generated config, a secret, an object fetched from storage. No host filesystem involved.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Do slow work without stalling.</strong> Defer a call to a worker, park the guest, and answer when your backend replies.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Audit that the guest cannot evade.</strong> Interception sits below the language runtime, so <code class="inline">ctypes</code> and raw syscalls do not route around it.</span></div>
-                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Extend confinement, never weaken it.</strong> Built-ins always run first, and registering on a blocklisted syscall is rejected before fork.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Serve files that do not exist.</strong> Hand the guest a sealed in-memory file with no host path.</span></div>
+                    <div class="feature-item"><i data-lucide="check"></i><span><strong>Audit that cannot be evaded.</strong> Interception sits below the runtime, so raw syscalls do not route around it.</span></div>
                 </div>
 
                 <div class="value-cta">
@@ -362,9 +338,8 @@ last_modified_at: 2026-08-09
 
 <span class="k">class</span> Audit(Handler):
     <span class="k">def</span> handle(<span class="k">self</span>, ctx):
-        <span class="c"># Runs in the supervisor, before the kernel acts.</span>
         <span class="k">print</span>(<span class="s">f"open {ctx.read_path()} from pid {ctx.pid}"</span>)
-        <span class="k">return</span> NotifAction.continue_()   <span class="c"># fall through</span>
+        <span class="k">return</span> NotifAction.continue_()
 
 sb = sandlock.Sandbox(fs_readable=[<span class="s">"/usr"</span>, <span class="s">"/lib"</span>, <span class="s">"/etc"</span>])
 sb.run_with_handlers(
@@ -386,7 +361,7 @@ sb.run_with_handlers(
                 <span>Performance</span>
             </div>
             <h2 class="section-title">Confinement You Can Leave On</h2>
-            <p class="section-subtitle">Landlock and the seccomp blocklist cost nothing per syscall once installed. Only the syscalls the supervisor explicitly registers for take a userspace round trip.</p>
+            <p class="section-subtitle">Landlock and the seccomp blocklist cost nothing per syscall. Only syscalls the supervisor registers for take a round trip.</p>
         </div>
 
         <div class="data-table-wrap">
@@ -433,7 +408,7 @@ sb.run_with_handlers(
                 </tbody>
             </table>
         </div>
-        <p class="table-note">Measured on a typical Linux workstation. Redis under Sandlock holds 97.1% of bare-metal throughput. COW fork produces roughly 1,900 forks per second, or 530 µs per clone.</p>
+        <p class="table-note">Measured on a typical Linux workstation. Redis under Sandlock holds 97.1% of bare-metal throughput; COW fork clones in about 530 µs.</p>
     </div>
 </section>
 
@@ -446,33 +421,33 @@ sb.run_with_handlers(
                 <span>Interfaces</span>
             </div>
             <h2 class="section-title">Reach for It From Where You Already Are</h2>
-            <p class="section-subtitle">One Rust core, exposed through a CLI, a C ABI, three language SDKs, an OCI runtime, and an MCP server. Every surface takes the same policy.</p>
+            <p class="section-subtitle">One Rust core. Every surface takes the same policy.</p>
         </div>
 
         <div class="interfaces-grid">
             <a href="/docs/cli.html" class="interface-card">
                 <div class="name"><i data-lucide="terminal"></i>CLI</div>
-                <p><code class="inline">sandlock run</code>, plus <code class="inline">ps</code>, <code class="inline">inspect</code>, <code class="inline">kill</code>, <code class="inline">learn</code>, and profile management.</p>
+                <p><code class="inline">sandlock run</code>, <code class="inline">ps</code>, <code class="inline">inspect</code>, <code class="inline">kill</code>, <code class="inline">learn</code>.</p>
             </a>
             <a href="/docs/python.html" class="interface-card">
                 <div class="name"><i data-lucide="file-code"></i>Python SDK</div>
-                <p>A <code class="inline">Sandbox</code> dataclass, pipelines, COW fork/reduce, and Python callbacks for dynamic policy.</p>
+                <p>A <code class="inline">Sandbox</code> dataclass, pipelines, COW fork, policy callbacks.</p>
             </a>
             <a href="/docs/rust.html" class="interface-card">
                 <div class="name"><i data-lucide="file-code-2"></i>Rust API</div>
-                <p>The core library itself: a typed builder, async execution, and custom seccomp-notify handlers.</p>
+                <p>The core itself: typed builder, async execution, custom handlers.</p>
             </a>
             <a href="/docs/go.html" class="interface-card">
                 <div class="name"><i data-lucide="file-code"></i>Go SDK</div>
-                <p>cgo bindings over the C ABI, with a plain configuration struct that is safe to share across goroutines.</p>
+                <p>cgo bindings with a plain config struct, safe across goroutines.</p>
             </a>
             <a href="/docs/oci.html" class="interface-card">
                 <div class="name"><i data-lucide="container"></i>OCI runtime</div>
-                <p>A drop-in low-level runtime for containerd, CRI-O, and Kubernetes. Namespace-less and cgroup-less.</p>
+                <p>Drop-in runtime for containerd, CRI-O, and Kubernetes.</p>
             </a>
             <a href="/docs/mcp.html" class="interface-card">
                 <div class="name"><i data-lucide="bot"></i>MCP server</div>
-                <p>Sandboxed shell, Python, and file tools for Claude Desktop, Cursor, and any other MCP client.</p>
+                <p>Sandboxed shell, Python, and file tools for any MCP client.</p>
             </a>
         </div>
     </div>
@@ -493,21 +468,21 @@ sb.run_with_handlers(
             <div class="capability-card">
                 <div class="capability-icon"><i data-lucide="bot"></i></div>
                 <h3 class="capability-title">AI agents and tool use</h3>
-                <p class="capability-description">Give an agent a workspace, one API endpoint, and nothing else. Credential injection keeps the key out of the agent's reach, and a policy callback can revoke network access the moment the agent finishes starting up.</p>
+                <p class="capability-description">A workspace, one API endpoint, and nothing else. The key stays out of the agent's reach.</p>
                 <a href="/use-cases.html#ai-agents" class="btn-link">Read more <i data-lucide="arrow-right"></i></a>
             </div>
 
             <div class="capability-card">
                 <div class="capability-icon"><i data-lucide="git-branch"></i></div>
                 <h3 class="capability-title">CI and untrusted builds</h3>
-                <p class="capability-description">Run a pull request's build steps with the source tree copy-on-write, the network closed, and a memory cap, on a shared runner with no root and no Docker socket to hand out.</p>
+                <p class="capability-description">Build a pull request with the source tree copy-on-write, the network closed, and no Docker socket to hand out.</p>
                 <a href="/use-cases.html#ci" class="btn-link">Read more <i data-lucide="arrow-right"></i></a>
             </div>
 
             <div class="capability-card">
                 <div class="capability-icon"><i data-lucide="users"></i></div>
                 <h3 class="capability-title">Per-request code execution</h3>
-                <p class="capability-description">Notebook backends, code interpreters, function platforms, and grading systems that start a fresh sandbox per request. At 5 ms there is no warm pool to keep resident and nothing carries over.</p>
+                <p class="capability-description">A fresh sandbox per request. At 5 ms there is no warm pool to keep and nothing carries over.</p>
                 <a href="/use-cases.html#per-request" class="btn-link">Read more <i data-lucide="arrow-right"></i></a>
             </div>
         </div>
@@ -517,7 +492,7 @@ sb.run_with_handlers(
 <section class="cta-band">
     <div class="cta-band-inner">
         <h2>Start Confining in Under Five Minutes</h2>
-        <p>Sandlock is Apache-2.0 licensed, free at any scale, and builds from source with Cargo. When you outgrow one machine, the Sandbox HTTP API and Sandbox Scheduler run it as a fleet.</p>
+        <p>Apache-2.0, free at any scale. When you outgrow one machine, run it as a fleet.</p>
         <div class="button-group">
             <a href="/docs/getting-started.html" class="btn btn-primary">
                 <i data-lucide="rocket"></i>
