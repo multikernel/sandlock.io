@@ -436,7 +436,7 @@ sb.run_with_handlers(
         <div class="usecase-grid">
             <div class="usecase-body">
                 <h2>More Pods per Node on Kubernetes</h2>
-                <p><code class="inline">sandlock-oci</code> implements the OCI runtime interface, so containerd, CRI-O, and the kubelet drive it in place of <code class="inline">runc</code> with your images unchanged. The result is <strong>namespace-less and cgroup-less</strong>, so a pod costs roughly what the process inside it costs.</p>
+                <p><code class="inline">sandlock-oci</code> implements the OCI runtime interface, so containerd, CRI-O, and the kubelet drive it in place of <code class="inline">runc</code> with your images unchanged. The result is <strong>namespace-less and cgroup-less</strong>, so a pod costs roughly what the process inside it costs. <a href="/docs/oci.html">Register the runtime</a> on each node once; after that, policy travels on pod annotations.</p>
 
                 <div class="usecase-points">
                     <div class="feature-item"><i data-lucide="check"></i><span><strong>About 5 ms to start</strong>, against roughly 200 ms for a container.</span></div>
@@ -453,30 +453,16 @@ sb.run_with_handlers(
             <div class="usecase-aside">
                 <div class="code-block">
                     <div class="code-block-header">
-                        <span class="code-block-title">Register the runtime, once</span>
+                        <span class="code-block-title">A RuntimeClass once, then policy per pod</span>
                         <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
                     </div>
-<pre><code><span class="c"># containerd; pod_annotations forwards io.sandlock.* keys</span>
-[plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock]
-  runtime_type   = <span class="s">"io.containerd.runc.v2"</span>
-  pod_annotations = [<span class="s">"io.sandlock.*"</span>]
-  [plugins.<span class="s">"io.containerd.grpc.v1.cri"</span>.containerd.runtimes.sandlock.options]
-    BinaryName = <span class="s">"/usr/local/bin/sandlock-oci"</span>
-
-<span class="c"># ---</span>
-apiVersion: node.k8s.io/v1
+<pre><code>apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
   name: sandlock
-handler: sandlock</code></pre>
-                </div>
-
-                <div class="code-block">
-                    <div class="code-block-header">
-                        <span class="code-block-title">Then policy travels in annotations</span>
-                        <button class="code-copy" type="button" aria-label="Copy code"><span class="code-copy-label">Copy</span></button>
-                    </div>
-<pre><code>apiVersion: v1
+handler: sandlock          <span class="c"># registered with containerd or CRI-O</span>
+---
+apiVersion: v1
 kind: Pod
 metadata:
   name: agent
