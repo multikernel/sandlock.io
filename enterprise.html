@@ -46,7 +46,8 @@ faq:
     line-height: var(--leading-tight);
 }
 
-.layer-head .tag {
+.layer-head .tag,
+.tier-head .tag {
     display: inline-block;
     margin-top: var(--space-3);
     padding: 3px 9px;
@@ -61,7 +62,8 @@ faq:
     border: 1px solid rgba(47, 125, 87, 0.2);
 }
 
-.layer-head .tag.commercial {
+.layer-head .tag.commercial,
+.tier-head .tag.commercial {
     background: rgba(201, 161, 62, 0.1);
     color: var(--accent-700);
     border-color: rgba(201, 161, 62, 0.25);
@@ -227,6 +229,84 @@ faq:
     line-height: var(--leading-relaxed);
     color: rgba(255, 255, 255, 0.5);
     margin: 0;
+}
+
+.tier-list {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-8);
+}
+
+.tier-card {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--space-8);
+    padding: var(--space-6) var(--space-8);
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-left: 3px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+}
+
+.tier-card.paid {
+    border-left-color: var(--accent-500);
+}
+
+.tier-head h3 {
+    font-size: var(--text-lg);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--gray-900);
+    line-height: var(--leading-tight);
+}
+
+.tier-price {
+    margin-top: var(--space-4);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--gray-900);
+}
+
+.tier-body {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: var(--space-5);
+    row-gap: var(--space-2);
+    margin: 0;
+}
+
+.tier-body dt {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    padding-top: 3px;
+}
+
+.tier-body dd {
+    margin: 0;
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    color: var(--gray-600);
+}
+
+@media (max-width: 760px) {
+    .tier-card {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+    }
+
+    .tier-body {
+        grid-template-columns: 1fr;
+        row-gap: var(--space-1);
+    }
+
+    .tier-body dd + dt {
+        margin-top: var(--space-3);
+    }
 }
 
 .buyer-faq {
@@ -535,22 +615,46 @@ faq:
             <p class="section-subtitle">The short version, in plain text, for anyone evaluating Sandlock on a deadline. A machine-readable copy is at <a href="/pricing.md">/pricing.md</a>.</p>
         </div>
 
-        <div class="data-table-wrap">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th scope="col">Component</th>
-                        <th scope="col">License</th>
-                        <th scope="col">Price</th>
-                        <th scope="col">Limits</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><th scope="row">Sandlock core, CLI, Python, Rust, and Go SDKs, OCI runtime, MCP server</th><td>Apache-2.0</td><td>Free</td><td>None. No seat, node, or usage cap; no telemetry; no registration.</td></tr>
-                    <tr><th scope="row">Sandbox HTTP API</th><td>Commercial, deployed in your account</td><td>Annual license, sized to the fleet</td><td>Per deployment; unlimited sandboxes and API keys within it.</td></tr>
-                    <tr><th scope="row">Sandbox Scheduler</th><td>Commercial, deployed in your account</td><td>Annual license, sized to the fleet</td><td>Per deployment; priced by node count.</td></tr>
-                </tbody>
-            </table>
+        <div class="tier-list">
+            <div class="tier-card">
+                <div class="tier-head">
+                    <h3>Sandlock</h3>
+                    <span class="tag">Apache-2.0</span>
+                    <div class="tier-price">Free</div>
+                </div>
+                <dl class="tier-body">
+                    <dt>Includes</dt>
+                    <dd>The sandbox core, CLI, Python, Rust, and Go SDKs, the OCI runtime, and the MCP server.</dd>
+                    <dt>Limits</dt>
+                    <dd>None. No seat, node, or usage cap; no telemetry; no registration.</dd>
+                </dl>
+            </div>
+            <div class="tier-card paid">
+                <div class="tier-head">
+                    <h3>Sandbox HTTP API</h3>
+                    <span class="tag commercial">Commercial</span>
+                    <div class="tier-price">Annual license</div>
+                </div>
+                <dl class="tier-body">
+                    <dt>Includes</dt>
+                    <dd>The API server and client SDKs, deployed in your account. Unlimited sandboxes and API keys within a deployment.</dd>
+                    <dt>Priced by</dt>
+                    <dd>Fleet size, per deployment.</dd>
+                </dl>
+            </div>
+            <div class="tier-card paid">
+                <div class="tier-head">
+                    <h3>Sandbox Scheduler</h3>
+                    <span class="tag commercial">Commercial</span>
+                    <div class="tier-price">Annual license</div>
+                </div>
+                <dl class="tier-body">
+                    <dt>Includes</dt>
+                    <dd>Placement, checkpoint store integration, and routers, deployed in your account.</dd>
+                    <dt>Priced by</dt>
+                    <dd>Node count, per deployment.</dd>
+                </dl>
+            </div>
         </div>
 
         <ul class="terms-list">
