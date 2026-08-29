@@ -39,7 +39,7 @@ Requirements: Linux 6.12 or later by default (older kernels can waive individual
 ## Commercial
 
 - [Enterprise](https://sandlock.io/enterprise.html): Sandbox HTTP API and Sandbox Scheduler, licensed and deployed in your own cloud account or data center
-- [Pricing](https://sandlock.io/pricing.md): what is free, what is licensed, how to get a quote
+- [Commercial terms](https://sandlock.io/enterprise.html#terms): what is free, what is licensed, how to get a quote
 
 ## Research and source
 
