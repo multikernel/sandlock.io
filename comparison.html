@@ -164,7 +164,7 @@ last_modified_at: 2026-08-28
             <span>Comparison</span>
         </div>
         <h1>Where Sandlock Fits</h1>
-        <p class="subtitle">Sandlock is not a container runtime with a smaller footprint, and it is not a lightweight VM. It occupies a different point entirely: strict, kernel-enforced confinement of a process, with no image, no privilege, and no boot.</p>
+        <p class="subtitle">Not a smaller container runtime, not a lightweight VM: kernel-enforced confinement of a process, with no image, no privilege, and no boot.</p>
         <p class="page-meta">By {{ page.author }} &middot; Updated <time datetime="{{ page.last_modified_at | date: '%Y-%m-%d' }}">{{ page.last_modified_at | date: "%B %-d, %Y" }}</time></p>
     </div>
 </section>
@@ -177,7 +177,7 @@ last_modified_at: 2026-08-28
                 <span>Side by side</span>
             </div>
             <h2 class="section-title">Sandlock, Containers, and MicroVMs</h2>
-            <p class="section-subtitle">The measured figures come from Sandlock's own benchmark suite on a typical Linux workstation. Treat them as an order of magnitude, not a guarantee for your hardware.</p>
+            <p class="section-subtitle">Figures from Sandlock's benchmark suite on a typical workstation. Treat them as an order of magnitude.</p>
         </div>
 
         <div class="data-table-wrap">
@@ -254,7 +254,7 @@ last_modified_at: 2026-08-28
                 </tbody>
             </table>
         </div>
-        <p class="table-note"><sup>*</sup> Rootless containers exist, but they require user-namespace support and a configured <code>/etc/subuid</code>. On a locked-down host, that configuration is itself a privileged operation.</p>
+        <p class="table-note"><sup>*</sup> Rootless containers need user namespaces and a configured <code>/etc/subuid</code>, itself a privileged operation.</p>
     </div>
 </section>
 
@@ -266,7 +266,7 @@ last_modified_at: 2026-08-28
                 <span>Adjacent tools</span>
             </div>
             <h2 class="section-title">Overlap With Related Tools</h2>
-            <p class="section-subtitle">Each solves part of the same problem. This is where the overlap ends, and which tool to reach for instead.</p>
+            <p class="section-subtitle">Where the overlap ends, and when to reach for the other tool.</p>
         </div>
 
         <div class="alt-grid">
@@ -275,9 +275,9 @@ last_modified_at: 2026-08-28
                 <p class="what">A userspace kernel that reimplements the Linux syscall interface.</p>
                 <dl>
                     <dt>Difference</dt>
-                    <dd><strong>Every syscall is serviced by the Sentry</strong>, and compatibility depends on how completely it reimplements the interface. Sandlock leaves the host kernel in the syscall path and intercepts only the calls that carry a policy decision.</dd>
+                    <dd><strong>Every syscall goes through the Sentry</strong>. Sandlock leaves the host kernel in the path and intercepts only calls that carry a policy decision.</dd>
                     <dt>Prefer gVisor when</dt>
-                    <dd>You are running a full untrusted OS image and can absorb the per-syscall cost.</dd>
+                    <dd>Running a full untrusted OS image and able to absorb the per-syscall cost.</dd>
                 </dl>
             </div>
 
@@ -286,20 +286,20 @@ last_modified_at: 2026-08-28
                 <p class="what">Confinement assembled from mount, PID, and user namespaces.</p>
                 <dl>
                     <dt>Difference</dt>
-                    <dd>Sandlock's policy is <strong>an access-control ruleset, not a constructed namespace</strong>, so there is no filesystem to assemble and no user-namespace requirement. It also covers ground namespaces do not: destination-IP allowlists, HTTP method and path rules, credential injection, and copy-on-write rollback.</dd>
+                    <dd><strong>An access-control ruleset, not a constructed namespace</strong>: no filesystem to assemble, no user namespaces, plus IP allowlists, HTTP rules, credential injection, and COW rollback that namespaces cannot express.</dd>
                     <dt>Prefer them when</dt>
-                    <dd>You are sandboxing desktop applications, where a private namespace view is itself the goal.</dd>
+                    <dd>Sandboxing desktop applications, where a private namespace view is the goal.</dd>
                 </dl>
             </div>
 
             <div class="alt-card">
                 <h3>OpenShell</h3>
-                <p class="what">An agent-first control plane from NVIDIA: a gateway, a policy engine, and privacy-aware routing for model calls.</p>
+                <p class="what">NVIDIA's agent control plane: gateway, policy engine, and model-call routing.</p>
                 <dl>
                     <dt>Difference</dt>
-                    <dd>OpenShell is a <strong>layer above a sandbox rather than a sandbox</strong>. It requires Docker, Podman, a microVM, or Kubernetes underneath and coordinates their lifecycle; Sandlock is the confinement itself, with no runtime to install and no image to build. They compose more naturally than they compete.</dd>
+                    <dd><strong>A layer above a sandbox, not a sandbox</strong>: it needs Docker, Podman, a microVM, or Kubernetes underneath. Sandlock is the confinement itself. They compose rather than compete.</dd>
                     <dt>Prefer OpenShell when</dt>
-                    <dd>You want the control plane around the sandbox, particularly its inference routing, which keeps sensitive context on sandbox compute and swaps model backends at runtime. Sandlock has no equivalent; its HTTP ACL and credential injection govern the request, not which model serves it.</dd>
+                    <dd>You want the control plane, especially its inference routing. Sandlock governs the request, not which model serves it.</dd>
                 </dl>
             </div>
 
@@ -308,9 +308,9 @@ last_modified_at: 2026-08-28
                 <p class="what">The default OCI runtime, built from namespaces, cgroups, and <code class="inline">pivot_root</code>.</p>
                 <dl>
                     <dt>Difference</dt>
-                    <dd>Not either/or. <a href="/docs/oci.html"><code class="inline">sandlock-oci</code></a> implements the same runtime interface, producing a <strong>namespace-less, cgroup-less container</strong> that runs unprivileged, so existing OCI images need no changes.</dd>
+                    <dd>Not either/or. <a href="/docs/oci.html"><code class="inline">sandlock-oci</code></a> implements the same interface, producing a <strong>namespace-less, cgroup-less container</strong> from unchanged images.</dd>
                     <dt>Prefer runc when</dt>
-                    <dd>Your workload depends on a container-private PID or network namespace specifically, rather than on the isolation they provide.</dd>
+                    <dd>The workload needs a private PID or network namespace specifically.</dd>
                 </dl>
             </div>
         </div>
@@ -325,44 +325,44 @@ last_modified_at: 2026-08-28
                 <span>Honest limits</span>
             </div>
             <h2 class="section-title">When Sandlock Is the Wrong Tool</h2>
-            <p class="section-subtitle">Picking the wrong isolation primitive is worse than picking none, because it buys confidence you have not earned. In these cases, reach for something else.</p>
+            <p class="section-subtitle">The wrong primitive buys confidence you have not earned. In these cases, reach for something else.</p>
         </div>
 
         <div class="not-for">
             <div class="not-for-item">
                 <h3>You need a separate kernel</h3>
-                <p>The workload runs on your kernel, so a kernel-level vulnerability is a shared risk. If your threat model includes an attacker willing to spend a kernel exploit, you need a hypervisor boundary.</p>
+                <p>The workload shares your kernel. If your threat model includes a kernel exploit, you need a hypervisor boundary.</p>
                 <p class="instead"><b>Use instead</b>A microVM, or <a href="https://multikernel.io" target="_blank" rel="noopener noreferrer">Multikernel's per-workload kernel</a>.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>You need to boot a system</h3>
-                <p>Sandlock confines processes, not machines. A workload that expects init, systemd, a full device tree, or its own kernel modules is asking for the wrong abstraction.</p>
+                <p>Sandlock confines processes, not machines. Anything expecting init, systemd, or kernel modules wants a VM.</p>
                 <p class="instead"><b>Use instead</b>A virtual machine.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>Your kernel is older than 6.12</h3>
-                <p>Landlock ABI v6 lands in 6.12, and the strict default refuses to start without the protections it expects. Usually only the two v6 IPC scopes are at stake; every earlier protection has its own, lower kernel floor.</p>
-                <p class="instead"><b>Use instead</b>Sandlock with the missing protections <a href="/docs/protections.html">degraded per policy</a>, accepting that each one waived is confinement you no longer have.</p>
+                <p>Landlock ABI v6 lands in 6.12 and the strict default refuses to start without it. Usually only the two IPC scopes are at stake.</p>
+                <p class="instead"><b>Use instead</b>Sandlock with the missing protections <a href="/docs/protections.html">waived per policy</a>, knowingly.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>You need hard CPU or memory guarantees</h3>
-                <p>Limits come from the supervisor, not cgroups: memory by tracking allocation syscalls, CPU by cycling SIGSTOP and SIGCONT. That bounds consumption without reserving capacity.</p>
+                <p>Limits come from the supervisor, not cgroups. They bound consumption without reserving capacity.</p>
                 <p class="instead"><b>Use instead</b>A cgroup on the Sandlock process itself. The two compose.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>You are not on Linux</h3>
-                <p>Landlock and seccomp are Linux facilities, and the entire design rests on them. There is no port to another platform and there will not be one.</p>
+                <p>The design rests on Landlock and seccomp. There is no port and will not be one.</p>
                 <p class="instead"><b>Use instead</b>A VM, or platform-native sandboxing.</p>
             </div>
 
             <div class="not-for-item">
                 <h3>You need rotating secrets</h3>
-                <p>Credential injection loads the secret once at supervisor start, so a leased or rotating value is only picked up on the next run.</p>
-                <p class="instead"><b>Use instead</b>Restart the sandbox on rotation. Sandlock composes with a secret manager rather than embedding one.</p>
+                <p>Credential injection loads the secret once at start; a rotated value is picked up on the next run.</p>
+                <p class="instead"><b>Use instead</b>Restart the sandbox on rotation.</p>
             </div>
         </div>
     </div>
@@ -371,7 +371,7 @@ last_modified_at: 2026-08-28
 <section class="cta-band">
     <div class="cta-band-inner">
         <h2>Still Deciding?</h2>
-        <p>Read the security model to see exactly what each layer enforces and what it does not, or bring us the workload and we will tell you honestly whether Sandlock is the right boundary for it.</p>
+        <p>Read the security model, or bring us the workload and we will tell you honestly whether Sandlock is the right boundary.</p>
         <div class="button-group">
             <a href="/security.html" class="btn btn-primary">
                 <i data-lucide="shield-check"></i>
