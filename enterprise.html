@@ -6,13 +6,13 @@ permalink: /enterprise.html
 last_modified_at: 2026-08-28
 faq:
   - q: "Sandlock shares the host kernel. Is that acceptable for untrusted code?"
-    a: "It is the boundary Sandlock offers, and the security model says so plainly. Landlock and seccomp are kernel-enforced allowlists, TOCTOU-safe, and stronger than any userspace wrapper, but a kernel exploit is a shared risk. If your threat model prices in a burned kernel 0-day, run Sandlock inside the VM boundary you already trust; the Scheduler packs density inside each boundary rather than replacing it."
+    a: "It is a kernel-enforced allowlist, not a VM. If your threat model includes a kernel exploit, run Sandlock inside the VM boundary you already trust; the Scheduler packs density inside it."
   - q: "Why not Firecracker, or a hosted sandbox cloud?"
-    a: "Firecracker needs KVM and holds memory for every idle microVM, which is most of them. Hosted sandbox clouds move your customers' code onto a kernel someone else operates and meter every call. Sandlock runs unprivileged on ordinary cloud VMs, in your account, and the Scheduler assigns memory only while a session is executing."
+    a: "Firecracker needs KVM and holds memory for every idle microVM. Hosted clouds run your customers' code on someone else's kernel. Sandlock runs unprivileged in your account and assigns memory only while a session executes."
   - q: "Our fleet is not on Linux 6.12 yet."
-    a: "The strict default refuses to start when a Landlock protection is missing, because silently weaker confinement is worse than a loud failure. Each protection can be waived explicitly and is reported in the posture evidence, and the OCI runtime tolerates older kernels. Bring the kernel mix to the technical call."
+    a: "The strict default refuses to start when a protection is missing. Each one can be waived explicitly and shows up in the posture evidence. Bring the kernel mix to the call."
   - q: "What happens if we stop paying?"
-    a: "The HTTP API and Scheduler stop being licensed. Everything under them keeps working: the sandbox, every SDK, the CLI, the OCI runtime, and the MCP server are Apache-2.0, and there is no license server or telemetry endpoint that could cut you off. Offboarding needs no data export because we hold nothing of yours."
+    a: "The API and Scheduler stop being licensed. The sandbox, SDKs, CLI, OCI runtime, and MCP server are Apache-2.0 and keep working. There is no license server to cut you off."
 ---
 
 <style>
@@ -193,44 +193,6 @@ faq:
     color: var(--gray-600);
 }
 
-.cta-steps {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-5);
-    margin: var(--space-12) 0 var(--space-10);
-    text-align: left;
-}
-
-.cta-step {
-    padding-top: var(--space-4);
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.cta-step .n {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    color: var(--accent-500);
-    margin-bottom: var(--space-3);
-}
-
-.cta-step h3 {
-    font-size: var(--text-base);
-    font-weight: 700;
-    color: white;
-    margin-bottom: var(--space-2);
-    letter-spacing: -0.01em;
-}
-
-.cta-band .cta-step p {
-    font-size: var(--text-sm);
-    line-height: var(--leading-relaxed);
-    color: rgba(255, 255, 255, 0.5);
-    margin: 0;
-}
-
 .tier-list {
     display: grid;
     gap: var(--space-4);
@@ -338,19 +300,6 @@ faq:
 }
 
 @media (max-width: 760px) {
-    .cta-steps {
-        grid-template-columns: 1fr;
-        gap: var(--space-6);
-        margin: var(--space-10) 0 var(--space-8);
-    }
-}
-
-@media (max-width: 900px) {
-    .layer-row {
-        grid-template-columns: 1fr;
-        gap: var(--space-4);
-    }
-
     .claim-row {
         grid-template-columns: 1fr;
     }
@@ -364,7 +313,7 @@ faq:
             <span>Commercial offering</span>
         </div>
         <h1>Operate Sandboxes at Fleet Scale, on Your Infrastructure</h1>
-        <p class="subtitle">The open-source core confines one process. The commercial layer runs thousands: the Sandbox HTTP API gives sandboxes identity, lifetime, and access control over REST, and the Sandbox Scheduler fits a thousand agent sessions into the memory a reservation model spends on twenty. Both deploy inside your trust boundary, and nothing calls home.</p>
+        <p class="subtitle">The open-source core confines one process. The Sandbox HTTP API and Sandbox Scheduler run thousands, fitting a thousand agent sessions into the memory a reservation model spends on twenty. Both deploy inside your trust boundary.</p>
 
         <div class="button-group">
             <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
@@ -387,7 +336,7 @@ faq:
                 <span>The split</span>
             </div>
             <h2 class="section-title">Open Source at the Core, Commercial at the Fleet Layer</h2>
-            <p class="section-subtitle">Everything that confines a process is open source. Everything that operates a fleet of sandboxes is licensed. There are no paywalled flags, no enterprise-only features, and no runtime that phones home.</p>
+            <p class="section-subtitle">Everything that confines a process is Apache-2.0. Everything that operates a fleet is licensed. No paywalled flags, nothing that phones home.</p>
         </div>
 
         <div class="layer-stack">
@@ -397,7 +346,7 @@ faq:
                     <span class="tag">Apache-2.0</span>
                 </div>
                 <div class="layer-body">
-                    <p>The sandbox itself: Landlock, seccomp-bpf, the supervisor, copy-on-write, the ACLs, credential injection, the handler API, and every interface from the CLI through the SDKs, the OCI runtime, and the MCP server. <strong>Nothing is gated.</strong> Apache-2.0 and free at any scale; teams run it in production indefinitely with no commercial relationship, and that is by design.</p>
+                    <p>The sandbox, the supervisor, copy-on-write, HTTP ACLs, credential injection, handlers, and every interface: CLI, SDKs, OCI runtime, MCP server. <strong>Free at any scale.</strong></p>
                 </div>
             </div>
 
@@ -407,7 +356,7 @@ faq:
                     <span class="tag commercial">Commercial</span>
                 </div>
                 <div class="layer-body">
-                    <p>An HTTP API over the core, plus client SDKs: create a sandbox from a container image, run commands in it, move files in and out, checkpoint it, and reconnect later from another process or machine. The layer where sandboxes stop being a function call and start being <strong>infrastructure with identity, lifetime, and access control</strong>.</p>
+                    <p>Sandboxes as remote infrastructure: create from an image, run, move files, checkpoint, reconnect from anywhere, behind keys with scopes.</p>
                 </div>
             </div>
 
@@ -417,7 +366,7 @@ faq:
                     <span class="tag commercial">Commercial</span>
                 </div>
                 <div class="layer-body">
-                    <p>Places sandboxes across a fleet, treating the checkpoint store rather than a node as a sandbox's home: a node lends memory for the duration of a call and reclaims it afterwards. For a workload that is idle more than 99% of the time, that difference sets the economics of running it.</p>
+                    <p>Places sessions across a fleet from a checkpoint store, so a node holds memory only while a session is executing.</p>
                 </div>
             </div>
         </div>
@@ -432,29 +381,29 @@ faq:
                 <span>Who this is for</span>
             </div>
             <h2 class="section-title">Teams Running Sandboxes as a Fleet</h2>
-            <p class="section-subtitle">The commercial layer earns its place once sandboxes outnumber machines. If you run one sandbox on one host, stop here: the open-source project is the whole answer, and we would rather you used it.</p>
+            <p class="section-subtitle">One sandbox on one host? The open-source project is the whole answer. This layer starts when sandboxes outnumber machines.</p>
         </div>
 
         <div class="fit-grid">
             <div class="fit">
                 <i data-lucide="bot"></i>
                 <h3>AI agent platforms</h3>
-                <p>You run a sandbox per session, sessions outlive a request, and the memory bill is dominated by sandboxes that are doing nothing.</p>
+                <p>A sandbox per session, and a memory bill dominated by sessions doing nothing.</p>
             </div>
             <div class="fit">
                 <i data-lucide="code-xml"></i>
                 <h3>Code execution products</h3>
-                <p>Notebook backends, interpreters, and evaluation harnesses that need an execution API with tenancy, quotas, and per-key accounting.</p>
+                <p>Notebooks, interpreters, and eval harnesses that need tenancy, quotas, and per-key accounting.</p>
             </div>
             <div class="fit">
                 <i data-lucide="server"></i>
                 <h3>Developer platforms</h3>
-                <p>Build and CI services where jobs come from outside your trust boundary and per-job VMs are the line item you are trying to remove.</p>
+                <p>CI and build services where per-job VMs are the line item you want gone.</p>
             </div>
             <div class="fit">
                 <i data-lucide="shield"></i>
                 <h3>Security engineering</h3>
-                <p>You are approving untrusted execution on shared infrastructure and need a boundary you can describe precisely to an auditor, with evidence rather than assertions to hand them.</p>
+                <p>Approving untrusted execution on shared hosts, with evidence to hand an auditor.</p>
             </div>
         </div>
     </div>
@@ -468,37 +417,33 @@ faq:
                 <span>HTTP API</span>
             </div>
             <h2 class="section-title">A Sandbox Service Running on Your Own Servers</h2>
-            <p class="section-subtitle">The core is a function call. The API is the point where a sandbox becomes a resource: it has an ID, survives the request, can be reached by any language, and is guarded by keys with scopes. These are the capabilities that matter once there is more than one machine, one tenant, or one caller.</p>
+            <p class="section-subtitle">The core is a function call. The API makes a sandbox a resource: an ID, a lifetime, any language, and keys with scopes.</p>
         </div>
 
         <div class="cap-grid">
             <div class="cap">
-                <h3><i data-lucide="globe"></i>Any language, with scoped keys</h3>
-                <p>A REST surface, so a caller needs no Landlock, no Linux, and no FFI. Keys carry fine-grained scopes across create, exec, files, checkpoints, and MCP, with per-key usage accounting.</p>
+                <h3><i data-lucide="globe"></i>Any language, scoped keys</h3>
+                <p>REST, so callers need no Linux and no FFI. Keys carry scopes and per-key usage accounting.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="save"></i>Sandboxes that outlive the call</h3>
-                <p>A sandbox has a stable ID, persists across runs, and can be reconnected from a different process or machine. Named checkpoints stop it and restore it later, the same mechanism the Scheduler uses to move it between nodes.</p>
+                <p>Stable IDs, reconnect from another machine, named checkpoints to stop and restore.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="container"></i>Container images as the rootfs</h3>
-                <p>Name an image and the server extracts it to a cached rootfs, sets up the chroot, and applies copy-on-write, with no image build in your loop.</p>
+                <p>Name an image; the server extracts, caches, chroots, and applies copy-on-write.</p>
             </div>
             <div class="cap">
-                <h3><i data-lucide="server-cog"></i>Long-running service processes</h3>
-                <p>Start a server inside a sandbox, query its status and ports, tail its output, and stop it, as a first-class lifecycle rather than a backgrounded command.</p>
+                <h3><i data-lucide="server-cog"></i>Long-running services</h3>
+                <p>Start a server in a sandbox, query its ports, tail its output, stop it.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="bot"></i>Remote MCP</h3>
-                <p>Native MCP transports, so Claude Desktop, Cursor, or any MCP client points at the API directly. Register your own Python tools; each call runs in its own sandbox.</p>
-            </div>
-            <div class="cap">
-                <h3><i data-lucide="git-branch"></i>Pipelines across stages</h3>
-                <p>The core's split-trust pipelines, available remotely: each stage keeps its own policy, and data flows between them without either stage gaining the other's access.</p>
+                <p>Point Claude Desktop, Cursor, or any MCP client at the API. Each tool call gets its own sandbox.</p>
             </div>
             <div class="cap">
                 <h3><i data-lucide="check-check"></i>Evidence for your auditor</h3>
-                <p>Fleet-wide posture reports and tamper-evident audit trails: every sandbox, its policy, and every waived protection, exportable in the language your compliance program speaks. Generated on your infrastructure, because nothing here phones home.</p>
+                <p>Posture reports and tamper-evident audit trails, generated on your infrastructure.</p>
             </div>
         </div>
     </div>
@@ -512,39 +457,37 @@ faq:
                 <span>Sandbox Scheduler</span>
             </div>
             <h2 class="section-title">Provision for Execution, Not for Idle Sessions</h2>
-            <p class="section-subtitle">An agent session spends nearly all of its life waiting on the model, and a reservation model pays for that wait. The Sandbox Scheduler keeps each session in a checkpoint store and assigns node memory only while the session is executing.</p>
+            <p class="section-subtitle">An agent session spends nearly all of its life waiting on the model. The Scheduler keeps it in a checkpoint store and gives it node memory only while it runs.</p>
         </div>
 
         <div class="claim-row">
             <div class="claim">
                 <span class="n">1,000</span>
                 <h3>Sessions</h3>
-                <p>Two gigabytes each. Under reservation that is 2 TB of memory held continuously, whether or not anything is running.</p>
+                <p>At 2 GB each, reservation holds 2 TB whether or not anything runs.</p>
             </div>
             <div class="claim">
                 <span class="n">42 GB</span>
                 <h3>Actual footprint</h3>
-                <p>Around ten are executing at any instant. Provision for a p99.9 of concurrent live sandboxes and the same thousand sessions fit in 42 GB.</p>
+                <p>About ten execute at any instant. Provision for p99.9 concurrency and the same thousand fit.</p>
             </div>
             <div class="claim">
                 <span class="n">~48&times;</span>
                 <h3>More sessions per host</h3>
-                <p>The ratio grows with fleet size, approaching 91&times; at a hundred thousand sessions, because concurrency averages out.</p>
+                <p>Approaching 91&times; at a hundred thousand sessions, as concurrency averages out.</p>
             </div>
         </div>
 
-        <p class="table-note" style="color: rgba(255,255,255,0.4); text-align: center; max-width: 70ch; margin-left: auto; margin-right: auto;">Figures are modelled from the duty cycle. Send us your session count, concurrency, and idle profile, and we will size the deployment against your workload.</p>
+        <p class="table-note" style="color: rgba(255,255,255,0.4); text-align: center; max-width: 70ch; margin-left: auto; margin-right: auto;">Modelled from the duty cycle. We size the deployment against your own session count, concurrency, and idle profile.</p>
 
         <div style="max-width: 76ch; margin: var(--space-16) auto 0;">
-            <h3 style="font-size: var(--text-lg); font-weight: 700; color: white; margin-bottom: var(--space-5);">How it works, and what that changes</h3>
             <div class="capability-features">
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>The session lives in the store, not on a node.</strong> Nodes write an incremental checkpoint whenever the sandbox goes quiet; a request restores it wherever there is room, sub-second, because creating a sandbox is itself a restore from a golden template. Idle memory goes back in graded steps.</span></div>
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>Node failure is not an incident.</strong> Failover, eviction, and rebalancing are the same path: the next request restores the session somewhere else. A node with no headroom refuses and the router moves on, so overcommit cannot become an outage.</span></div>
-                <div class="feature-item"><i data-lucide="check"></i><span><strong>Forking a session is free.</strong> Restore one checkpoint any number of times under fresh ids, which is what best-of-N sampling and tree search need. Routers hold no durable state, so run as many as you like.</span></div>
-                <div class="feature-item"><i data-lucide="minus"></i><span><strong>Two things do not move with a session.</strong> TCP connections drop on relocation and GPU state does not checkpoint cleanly, so plan long-lived connections and GPU work around that boundary.</span></div>
+                <div class="feature-item"><i data-lucide="check"></i><span><strong>The session lives in the store.</strong> Nodes checkpoint it when it goes quiet; any node with room restores it sub-second.</span></div>
+                <div class="feature-item"><i data-lucide="check"></i><span><strong>Node failure is not an incident.</strong> Failover, eviction, and rebalancing are the same path: restore elsewhere.</span></div>
+                <div class="feature-item"><i data-lucide="check"></i><span><strong>Forking is free.</strong> Restore one checkpoint under many IDs, which is what best-of-N and tree search need.</span></div>
+                <div class="feature-item"><i data-lucide="minus"></i><span><strong>Two things do not move.</strong> TCP connections drop on relocation and GPU state does not checkpoint.</span></div>
             </div>
         </div>
-
     </div>
 </section>
 
@@ -556,29 +499,24 @@ faq:
                 <span>Deployment model</span>
             </div>
             <h2 class="section-title">Your Infrastructure, Not a Shared Cloud</h2>
-            <p class="section-subtitle">Licensed software, not a hosted service. Your workloads never cross a vendor boundary, your security team keeps the keys, and no shared cloud sits between you and your customers.</p>
+            <p class="section-subtitle">Licensed software, not a hosted service. Your workloads never cross a vendor boundary.</p>
         </div>
 
         <div class="fit-grid">
             <div class="fit">
                 <i data-lucide="cloud"></i>
-                <h3>Your cloud account or your data center</h3>
-                <p>The API, the Scheduler, and every node run in your AWS, GCP, or Azure account, or on bare metal. Nothing needs KVM, so ordinary cloud VMs without nested virtualization are fine. Workloads, checkpoints, and credentials never leave your trust boundary.</p>
-            </div>
-            <div class="fit">
-                <i data-lucide="shield-half"></i>
-                <h3>No shared cloud, by design</h3>
-                <p>Your code never runs on kernels we operate. Cross-tenant isolation stays where your auditor wants it: on your hypervisor, under your control, with the Scheduler packing density inside each boundary.</p>
+                <h3>Your account or your data center</h3>
+                <p>AWS, GCP, Azure, or bare metal. Nothing needs KVM, so ordinary cloud VMs are fine.</p>
             </div>
             <div class="fit">
                 <i data-lucide="plug"></i>
-                <h3>No operational dependency on us</h3>
-                <p>Nothing in your stack calls a service we operate: no hosted control plane, no license server, no telemetry endpoint. An outage of ours cannot become an outage of yours, and offboarding requires no data export, because we hold nothing of yours.</p>
+                <h3>No dependency on us</h3>
+                <p>No hosted control plane, no license server, no telemetry. Our outage cannot become yours.</p>
             </div>
             <div class="fit">
                 <i data-lucide="layers"></i>
-                <h3>An open-source exit path</h3>
-                <p>Drop the commercial layers and the complete Apache-2.0 core remains yours: the sandbox, every SDK, the CLI, the OCI runtime, and the MCP server. The confinement your platform rests on is not ours to take away.</p>
+                <h3>An open-source exit</h3>
+                <p>Drop the commercial layers and the complete Apache-2.0 core remains yours.</p>
             </div>
         </div>
     </div>
@@ -592,7 +530,6 @@ faq:
                 <span>Before you book</span>
             </div>
             <h2 class="section-title">The Questions Every Evaluation Raises</h2>
-            <p class="section-subtitle">Asked on nearly every first call. The answers are the same ones we give there.</p>
         </div>
 
         <div class="buyer-faq">
@@ -612,7 +549,7 @@ faq:
                 <span>Commercial terms</span>
             </div>
             <h2 class="section-title">What Is Free, What Is Licensed, and How It Is Priced</h2>
-            <p class="section-subtitle">The short version, in plain text, for anyone evaluating Sandlock on a deadline. A machine-readable copy is at <a href="/pricing.md">/pricing.md</a>.</p>
+            <p class="section-subtitle">Machine-readable copy at <a href="/pricing.md">/pricing.md</a>.</p>
         </div>
 
         <div class="tier-list">
@@ -624,9 +561,9 @@ faq:
                 </div>
                 <dl class="tier-body">
                     <dt>Includes</dt>
-                    <dd>The sandbox core, CLI, Python, Rust, and Go SDKs, the OCI runtime, and the MCP server.</dd>
+                    <dd>Core, CLI, Python, Rust, and Go SDKs, OCI runtime, MCP server.</dd>
                     <dt>Limits</dt>
-                    <dd>None. No seat, node, or usage cap; no telemetry; no registration.</dd>
+                    <dd>None. No caps, no telemetry, no registration.</dd>
                 </dl>
             </div>
             <div class="tier-card paid">
@@ -637,9 +574,9 @@ faq:
                 </div>
                 <dl class="tier-body">
                     <dt>Includes</dt>
-                    <dd>The API server and client SDKs, deployed in your account. Unlimited sandboxes and API keys within a deployment.</dd>
+                    <dd>API server and client SDKs. Unlimited sandboxes and keys per deployment.</dd>
                     <dt>Priced by</dt>
-                    <dd>Fleet size, per deployment.</dd>
+                    <dd>Fleet size.</dd>
                 </dl>
             </div>
             <div class="tier-card paid">
@@ -650,18 +587,17 @@ faq:
                 </div>
                 <dl class="tier-body">
                     <dt>Includes</dt>
-                    <dd>Placement, checkpoint store integration, and routers, deployed in your account.</dd>
+                    <dd>Placement, checkpoint store, and routers.</dd>
                     <dt>Priced by</dt>
-                    <dd>Node count, per deployment.</dd>
+                    <dd>Node count.</dd>
                 </dl>
             </div>
         </div>
 
         <ul class="terms-list">
-            <li><strong>Deployment.</strong> Self-hosted only. There is no hosted or shared-tenant offering.</li>
-            <li><strong>Trial.</strong> A pilot on your infrastructure against real traffic precedes any contract.</li>
-            <li><strong>Support.</strong> Engineering support and a response SLA are part of every license.</li>
-            <li><strong>Quote.</strong> Pricing depends on fleet size. Email <a href="mailto:contact@multikernel.io">contact@multikernel.io</a> with expected node count and peak concurrent sandboxes, or <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer">book a technical call</a>.</li>
+            <li><strong>Self-hosted only.</strong> No hosted or shared-tenant offering.</li>
+            <li><strong>Pilot first.</strong> On your infrastructure, against real traffic, before anything is signed.</li>
+            <li><strong>Support included.</strong> Engineering support and a response SLA with every license.</li>
         </ul>
     </div>
 </section>
@@ -669,25 +605,7 @@ faq:
 <section class="cta-band">
     <div class="cta-band-inner" style="max-width: 940px;">
         <h2>Evaluate It Against Your Workload</h2>
-        <p>When sandboxes become a fleet, the API and the Scheduler turn them into infrastructure you can operate: many tenants, many machines, and a memory bill that tracks work done rather than sessions held.</p>
-
-        <div class="cta-steps">
-            <div class="cta-step">
-                <span class="n">01</span>
-                <h3>A technical call</h3>
-                <p>A thirty-minute engineering discussion with the CEO, not a sales pitch. Bring the workload.</p>
-            </div>
-            <div class="cta-step">
-                <span class="n">02</span>
-                <h3>Sized against your numbers</h3>
-                <p>Sessions, concurrency, and idle profile, measured rather than modelled.</p>
-            </div>
-            <div class="cta-step">
-                <span class="n">03</span>
-                <h3>A pilot on your infrastructure</h3>
-                <p>Running against real traffic before anything is signed.</p>
-            </div>
-        </div>
+        <p>A thirty-minute engineering call with the CEO, sized against your numbers, then a pilot on your infrastructure. Bring the workload.</p>
 
         <div class="button-group">
             <a href="https://calendar.app.google/nc1upkqQoUeoukdD9" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
